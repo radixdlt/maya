@@ -2,7 +2,7 @@ use asgard_vault::AsgardSwapEvent;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
-fn instantiate_asgard_vault(ledger: &mut DefaultLedgerSimulator) -> ComponentAddress {
+fn asgard_vault_instantiate(ledger: &mut DefaultLedgerSimulator) -> ComponentAddress {
     let package_address = ledger.compile_and_publish(this_package!());
     let receipt = ledger.execute_manifest(
         ManifestBuilder::new()
@@ -19,30 +19,71 @@ fn instantiate_asgard_vault(ledger: &mut DefaultLedgerSimulator) -> ComponentAdd
     receipt.expect_commit_success().new_component_addresses()[0]
 }
 
-#[test]
-fn test_asgard_vault_swap() {
-    // Arrange
-    let mut ledger = LedgerSimulatorBuilder::new().build();
-    let asgard_component = instantiate_asgard_vault(&mut ledger);
-    let (public_key, _, account) = ledger.new_account(false);
-
-    // Act
+fn asgard_vault_swap(
+    ledger: &mut DefaultLedgerSimulator,
+    asgard_component: ComponentAddress,
+    from_account: ComponentAddress,
+    public_key: Secp256k1PublicKey,
+    amount: Decimal,
+    into: String,
+    dest_address: String,
+) -> TransactionReceiptV1 {
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
-        .withdraw_from_account(account, XRD, dec!(100))
+        .withdraw_from_account(from_account, XRD, amount)
         .take_all_from_worktop(XRD, "xrd_bucket")
         .with_name_lookup(|builder, lookup| {
             let xrd_bucket = lookup.bucket("xrd_bucket");
             builder.call_method(
                 asgard_component,
                 "swap",
-                manifest_args!(xrd_bucket, "BTC", "btc_address"),
+                manifest_args!(xrd_bucket, into, dest_address),
             )
         })
         .build();
-    let receipt = ledger.execute_manifest(
+    ledger.execute_manifest(
         manifest,
         vec![NonFungibleGlobalId::from_public_key(&public_key)],
+    )
+}
+
+fn asgard_vault_send(
+    ledger: &mut DefaultLedgerSimulator,
+    asgard_component: ComponentAddress,
+    amount: Decimal,
+    dest_address: ComponentAddress,
+) -> TransactionReceiptV1 {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            asgard_component,
+            "signer_send",
+            manifest_args!(amount, dest_address),
+        )
+        .build();
+    ledger.execute_manifest(manifest, vec![])
+}
+
+#[test]
+fn test_asgard_vault_swap_and_send() {
+    // Arrange
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let asgard_component = asgard_vault_instantiate(&mut ledger);
+    let (public_key, _, account) = ledger.new_account(false);
+
+    let into = "BTC".to_string();
+    let dest_address = "btc_address".to_string();
+
+    // Perform Swap
+    // Act
+    let receipt = asgard_vault_swap(
+        &mut ledger,
+        asgard_component,
+        account,
+        public_key,
+        dec!(100),
+        into.clone(),
+        dest_address.clone(),
     );
 
     // Assert
@@ -71,11 +112,26 @@ fn test_asgard_vault_swap() {
     assert_eq!(
         scrypto_decode::<AsgardSwapEvent>(&event_data).unwrap(),
         AsgardSwapEvent {
-            into: "BTC".to_string(),
-            dest_address: "btc_address".to_string(),
+            into,
+            dest_address,
             limit: None,
             affiliate: None,
             fee: None,
         }
+    );
+
+    // Perform Send
+    // Arrange
+    let balance = ledger.get_component_balance(account, XRD);
+
+    // Act
+    let receipt = asgard_vault_send(&mut ledger, asgard_component, dec!(100), account);
+
+    // Assert
+    let _result = receipt.expect_commit_success();
+
+    assert_eq!(
+        balance + dec!(100),
+        ledger.get_component_balance(account, XRD)
     );
 }
