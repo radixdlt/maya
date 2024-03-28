@@ -104,7 +104,12 @@ impl AsgardVaultSimulator {
     }
 
     // Only signer can call it
-    pub fn send(&mut self, amount: Decimal, dest_address: ComponentAddress) -> TransactionReceipt {
+    pub fn send(
+        &mut self,
+        badge: NonFungibleGlobalId,
+        amount: Decimal,
+        dest_address: ComponentAddress,
+    ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
@@ -112,15 +117,33 @@ impl AsgardVaultSimulator {
                 manifest_args!(amount, dest_address),
             )
             .build();
-        self.ledger
-            .execute_manifest(manifest, vec![self.signer.badge.clone()])
+        self.ledger.execute_manifest(manifest, vec![badge])
+    }
+
+    pub fn update_signer(&mut self, new_signer: User) {
+        let new_signer_rule = rule!(require(new_signer.badge.clone()));
+        let manifest = Self::manifest_builder()
+            .set_role(
+                self.component_address,
+                ModuleId::Main,
+                RoleKey::new("signer"),
+                new_signer_rule,
+            )
+            .build();
+        let receipt = self
+            .ledger
+            .execute_manifest(manifest, vec![self.signer.badge.clone()]);
+
+        receipt.expect_commit_success();
+
+        self.signer = new_signer;
     }
 }
 
 #[test]
 fn asgard_vault_swap_and_send() {
     // Arrange
-    let mut sim = AsgardVaultSimulator::new();
+    let mut asgard_vault = AsgardVaultSimulator::new();
 
     // Act
     let into = "BTC".to_string();
@@ -128,7 +151,7 @@ fn asgard_vault_swap_and_send() {
 
     // Perform Swap
     // Act
-    let receipt = sim.swap(dec!(100), into.clone(), dest_address.clone());
+    let receipt = asgard_vault.swap(dec!(100), into.clone(), dest_address.clone());
 
     // Assert
     let result = receipt.expect_commit_success();
@@ -149,7 +172,10 @@ fn asgard_vault_swap_and_send() {
     assert_eq!(
         event_type_identifier.to_owned(),
         EventTypeIdentifier(
-            Emitter::Method(sim.component_address.into_node_id(), ModuleId::Main),
+            Emitter::Method(
+                asgard_vault.component_address.into_node_id(),
+                ModuleId::Main
+            ),
             "AsgardSwapEvent".to_string()
         )
     );
@@ -166,13 +192,66 @@ fn asgard_vault_swap_and_send() {
 
     // Perform Send
     // Arrange
-    let balance = sim.get_swapper_balance();
+    let balance = asgard_vault.get_swapper_balance();
 
     // Act
-    let receipt = sim.send(dec!(100), sim.swapper.address);
+    let receipt = asgard_vault.send(
+        asgard_vault.signer.badge.clone(),
+        dec!(100),
+        asgard_vault.swapper.address,
+    );
 
     // Assert
     let _result = receipt.expect_commit_success();
 
-    assert_eq!(balance + dec!(100), sim.get_swapper_balance());
+    assert_eq!(balance + dec!(100), asgard_vault.get_swapper_balance());
+}
+
+#[test]
+fn asgard_vault_update_signer_rule() {
+    // Arrange
+    let mut asgard_vault = AsgardVaultSimulator::new();
+    let into = "BTC".to_string();
+    let dest_address = "btc_address".to_string();
+
+    let old_signer_badge = asgard_vault.signer.badge.clone();
+
+    // Act
+    let receipt = asgard_vault.swap(dec!(1000), into.clone(), dest_address.clone());
+    receipt.expect_commit_success();
+
+    // No error expected when using old signer badge
+    let receipt = asgard_vault.send(
+        old_signer_badge.clone(),
+        dec!(100),
+        asgard_vault.swapper.address,
+    );
+    receipt.expect_commit_success();
+
+    // Update signer rule
+    let new_signer = User::new(&mut asgard_vault.ledger);
+    asgard_vault.update_signer(new_signer);
+
+    // Expect AuthError when using old signer badge
+    let receipt = asgard_vault.send(
+        old_signer_badge.clone(),
+        dec!(100),
+        asgard_vault.swapper.address,
+    );
+    receipt.expect_specific_failure(|e| {
+        matches!(
+            e,
+            RuntimeError::SystemModuleError(SystemModuleError::AuthError(AuthError::Unauthorized(
+                ..
+            )))
+        )
+    });
+
+    // No error expected when using current signer badge
+    let receipt = asgard_vault.send(
+        asgard_vault.signer.badge.clone(),
+        dec!(100),
+        asgard_vault.swapper.address,
+    );
+    receipt.expect_commit_success();
 }
