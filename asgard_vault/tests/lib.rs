@@ -1,4 +1,4 @@
-use asgard_vault::AsgardSwapEvent;
+use asgard_vault::AsgardDepositEvent;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -81,12 +81,7 @@ impl AsgardVaultSimulator {
         self.ledger.get_component_balance(self.swapper.address, XRD)
     }
 
-    pub fn swap(
-        &mut self,
-        amount: Decimal,
-        into: String,
-        dest_address: String,
-    ) -> TransactionReceipt {
+    pub fn deposit(&mut self, amount: Decimal, memo: String) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .withdraw_from_account(self.swapper.address, XRD, amount)
             .take_all_from_worktop(XRD, "xrd_bucket")
@@ -94,8 +89,8 @@ impl AsgardVaultSimulator {
                 let xrd_bucket = lookup.bucket("xrd_bucket");
                 builder.call_method(
                     self.component_address,
-                    "swap",
-                    manifest_args!(xrd_bucket, into, dest_address),
+                    "deposit",
+                    manifest_args!(xrd_bucket, memo),
                 )
             })
             .build();
@@ -107,14 +102,16 @@ impl AsgardVaultSimulator {
     pub fn send(
         &mut self,
         badge: NonFungibleGlobalId,
+        to: ComponentAddress,
+        asset: ResourceAddress,
         amount: Decimal,
-        dest_address: ComponentAddress,
+        memo: String,
     ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
                 "signer_send",
-                manifest_args!(amount, dest_address),
+                manifest_args!(to, asset, amount, memo),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
@@ -146,12 +143,12 @@ fn asgard_vault_swap_and_send() {
     let mut asgard_vault = AsgardVaultSimulator::new();
 
     // Act
-    let into = "BTC".to_string();
-    let dest_address = "btc_address".to_string();
+    let swap_memo = "SWAP:MAYA.CACAO".to_string();
+    let send_memo = "OUT:".to_string();
 
     // Perform Swap
     // Act
-    let receipt = asgard_vault.swap(dec!(100), into.clone(), dest_address.clone());
+    let receipt = asgard_vault.deposit(dec!(100), swap_memo.clone());
 
     // Assert
     let result = receipt.expect_commit_success();
@@ -176,17 +173,16 @@ fn asgard_vault_swap_and_send() {
                 asgard_vault.component_address.into_node_id(),
                 ModuleId::Main
             ),
-            "AsgardSwapEvent".to_string()
+            "AsgardDepositEvent".to_string()
         )
     );
     assert_eq!(
-        scrypto_decode::<AsgardSwapEvent>(&event_data).unwrap(),
-        AsgardSwapEvent {
-            into,
-            dest_address,
-            limit: None,
-            affiliate: None,
-            fee: None,
+        scrypto_decode::<AsgardDepositEvent>(&event_data).unwrap(),
+        AsgardDepositEvent {
+            vault: asgard_vault.component_address,
+            asset: XRD,
+            amount: dec!(100),
+            memo: swap_memo,
         }
     );
 
@@ -197,8 +193,10 @@ fn asgard_vault_swap_and_send() {
     // Act
     let receipt = asgard_vault.send(
         asgard_vault.signer.badge.clone(),
-        dec!(100),
         asgard_vault.swapper.address,
+        XRD,
+        dec!(100),
+        send_memo,
     );
 
     // Assert
@@ -211,20 +209,22 @@ fn asgard_vault_swap_and_send() {
 fn asgard_vault_update_signer_rule() {
     // Arrange
     let mut asgard_vault = AsgardVaultSimulator::new();
-    let into = "BTC".to_string();
-    let dest_address = "btc_address".to_string();
+    let swap_memo = "SWAP:MAYA.CACAO".to_string();
+    let send_memo = "OUT:".to_string();
 
     let old_signer_badge = asgard_vault.signer.badge.clone();
 
     // Act
-    let receipt = asgard_vault.swap(dec!(1000), into.clone(), dest_address.clone());
+    let receipt = asgard_vault.deposit(dec!(1000), swap_memo);
     receipt.expect_commit_success();
 
     // No error expected when using old signer badge
     let receipt = asgard_vault.send(
         old_signer_badge.clone(),
-        dec!(100),
         asgard_vault.swapper.address,
+        XRD,
+        dec!(100),
+        send_memo.clone(),
     );
     receipt.expect_commit_success();
 
@@ -235,8 +235,10 @@ fn asgard_vault_update_signer_rule() {
     // Expect AuthError when using old signer badge
     let receipt = asgard_vault.send(
         old_signer_badge.clone(),
-        dec!(100),
         asgard_vault.swapper.address,
+        XRD,
+        dec!(100),
+        send_memo.clone(),
     );
     receipt.expect_specific_failure(|e| {
         matches!(
@@ -250,8 +252,10 @@ fn asgard_vault_update_signer_rule() {
     // No error expected when using current signer badge
     let receipt = asgard_vault.send(
         asgard_vault.signer.badge.clone(),
-        dec!(100),
         asgard_vault.swapper.address,
+        XRD,
+        dec!(100),
+        send_memo,
     );
     receipt.expect_commit_success();
 }
