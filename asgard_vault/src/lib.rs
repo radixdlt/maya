@@ -10,8 +10,7 @@ mod asgard_vault {
         },
         methods {
             swap => PUBLIC;
-            signer_send => PUBLIC;
-            // signer_send => restrict_to: [signer];
+            signer_send => restrict_to: [signer];
         }
     }
 
@@ -20,12 +19,20 @@ mod asgard_vault {
     }
 
     impl AsgardVault {
-        pub fn instantiate() -> Global<AsgardVault> {
+        pub fn instantiate(
+            owner_badge: NonFungibleGlobalId,
+            signer_rule: AccessRule,
+        ) -> Global<AsgardVault> {
+            let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
+
             Self {
                 xrd: Vault::new(XRD),
             }
             .instantiate()
-            .prepare_to_globalize(OwnerRole::None)
+            .prepare_to_globalize(owner_role)
+            .roles(roles! {
+                signer => signer_rule;
+            })
             .globalize()
         }
 

@@ -2,7 +2,11 @@ use asgard_vault::AsgardSwapEvent;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
-fn asgard_vault_instantiate(ledger: &mut DefaultLedgerSimulator) -> ComponentAddress {
+fn asgard_vault_instantiate(
+    ledger: &mut DefaultLedgerSimulator,
+    owner_badge: NonFungibleGlobalId,
+    signer_rule: AccessRule,
+) -> ComponentAddress {
     let package_address = ledger.compile_and_publish(this_package!());
     let receipt = ledger.execute_manifest(
         ManifestBuilder::new()
@@ -11,7 +15,7 @@ fn asgard_vault_instantiate(ledger: &mut DefaultLedgerSimulator) -> ComponentAdd
                 package_address,
                 "AsgardVault",
                 "instantiate",
-                manifest_args!(),
+                manifest_args!(owner_badge, signer_rule),
             )
             .build(),
         vec![],
@@ -23,7 +27,7 @@ fn asgard_vault_swap(
     ledger: &mut DefaultLedgerSimulator,
     asgard_component: ComponentAddress,
     from_account: ComponentAddress,
-    public_key: Secp256k1PublicKey,
+    badge: NonFungibleGlobalId,
     amount: Decimal,
     into: String,
     dest_address: String,
@@ -41,15 +45,13 @@ fn asgard_vault_swap(
             )
         })
         .build();
-    ledger.execute_manifest(
-        manifest,
-        vec![NonFungibleGlobalId::from_public_key(&public_key)],
-    )
+    ledger.execute_manifest(manifest, vec![badge])
 }
 
 fn asgard_vault_send(
     ledger: &mut DefaultLedgerSimulator,
     asgard_component: ComponentAddress,
+    badge: NonFungibleGlobalId,
     amount: Decimal,
     dest_address: ComponentAddress,
 ) -> TransactionReceiptV1 {
@@ -61,15 +63,27 @@ fn asgard_vault_send(
             manifest_args!(amount, dest_address),
         )
         .build();
-    ledger.execute_manifest(manifest, vec![])
+    ledger.execute_manifest(manifest, vec![badge])
 }
 
 #[test]
 fn test_asgard_vault_swap_and_send() {
     // Arrange
     let mut ledger = LedgerSimulatorBuilder::new().build();
-    let asgard_component = asgard_vault_instantiate(&mut ledger);
-    let (public_key, _, account) = ledger.new_account(false);
+    // Owner account
+    let (owner_public_key, _, _owner_account) = ledger.new_account(false);
+    let owner_badge = NonFungibleGlobalId::from_public_key(&owner_public_key);
+
+    // Signer account
+    let (signer_public_key, _, _signer_account) = ledger.new_account(false);
+    let signer_badge = NonFungibleGlobalId::from_public_key(&signer_public_key);
+    let signer_rule = rule!(require(signer_badge.clone()));
+    // Swapper account
+    let (swapper_public_key, _, swapper_account) = ledger.new_account(false);
+    let swapper_badge = NonFungibleGlobalId::from_public_key(&swapper_public_key);
+
+    let asgard_component =
+        asgard_vault_instantiate(&mut ledger, owner_badge.clone(), signer_rule.clone());
 
     let into = "BTC".to_string();
     let dest_address = "btc_address".to_string();
@@ -79,8 +93,8 @@ fn test_asgard_vault_swap_and_send() {
     let receipt = asgard_vault_swap(
         &mut ledger,
         asgard_component,
-        account,
-        public_key,
+        swapper_account,
+        swapper_badge,
         dec!(100),
         into.clone(),
         dest_address.clone(),
@@ -122,16 +136,22 @@ fn test_asgard_vault_swap_and_send() {
 
     // Perform Send
     // Arrange
-    let balance = ledger.get_component_balance(account, XRD);
+    let balance = ledger.get_component_balance(swapper_account, XRD);
 
     // Act
-    let receipt = asgard_vault_send(&mut ledger, asgard_component, dec!(100), account);
+    let receipt = asgard_vault_send(
+        &mut ledger,
+        asgard_component,
+        signer_badge.clone(),
+        dec!(100),
+        swapper_account,
+    );
 
     // Assert
     let _result = receipt.expect_commit_success();
 
     assert_eq!(
         balance + dec!(100),
-        ledger.get_component_balance(account, XRD)
+        ledger.get_component_balance(swapper_account, XRD)
     );
 }
