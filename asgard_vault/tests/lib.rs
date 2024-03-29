@@ -1,4 +1,4 @@
-use asgard_vault::AsgardDepositEvent;
+use asgard_vault::{AsgardDepositEvent, AsgardTransferOutEvent};
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -84,13 +84,12 @@ impl AsgardVaultSimulator {
     pub fn deposit(&mut self, amount: Decimal, memo: String) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .withdraw_from_account(self.swapper.address, XRD, amount)
-            .take_all_from_worktop(XRD, "xrd_bucket")
-            .with_name_lookup(|builder, lookup| {
-                let xrd_bucket = lookup.bucket("xrd_bucket");
+            .take_all_from_worktop(XRD, "bucket")
+            .with_bucket("bucket", |builder, bucket| {
                 builder.call_method(
                     self.component_address,
                     "deposit",
-                    manifest_args!(xrd_bucket, memo),
+                    manifest_args!(bucket, memo),
                 )
             })
             .build();
@@ -99,7 +98,7 @@ impl AsgardVaultSimulator {
     }
 
     // Only signer can call it
-    pub fn send(
+    pub fn transfer_out(
         &mut self,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
@@ -110,7 +109,7 @@ impl AsgardVaultSimulator {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
-                "signer_send",
+                "transfer_out",
                 manifest_args!(to, asset, amount, memo),
             )
             .build();
@@ -144,7 +143,7 @@ fn asgard_vault_swap_and_send() {
 
     // Act
     let swap_memo = "SWAP:MAYA.CACAO".to_string();
-    let send_memo = "OUT:".to_string();
+    let tx_out_memo = "OUT:".to_string();
 
     // Perform Swap
     // Act
@@ -153,29 +152,21 @@ fn asgard_vault_swap_and_send() {
     // Assert
     let result = receipt.expect_commit_success();
     let events = result.application_events.as_slice();
-    let [
-        _, /* LockFeeEvent */
-        _, /* WithdrawEvent */
-        _, /* WithdrawEvent */
-        _, /* DepositEvent */
-        (event_type_identifier, event_data), /* AsgardSwapEvent */
-        _, /* PayFeeEvent */
-        _, /* DepositEvent */
-        _, /* BurnFungibleResourceEvent */
-    ] = events else {
-        panic!("Incorrect number of events: {}", events.len())
-    };
 
-    assert_eq!(
-        event_type_identifier.to_owned(),
-        EventTypeIdentifier(
-            Emitter::Method(
-                asgard_vault.component_address.into_node_id(),
-                ModuleId::Main
-            ),
-            "AsgardDepositEvent".to_string()
-        )
-    );
+    let event_data = events
+        .iter()
+        .find(|(type_identifier, _)| {
+            type_identifier.eq(&EventTypeIdentifier(
+                Emitter::Method(
+                    asgard_vault.component_address.into_node_id(),
+                    ModuleId::Main,
+                ),
+                "AsgardDepositEvent".to_string(),
+            ))
+        })
+        .map(|(_, data)| data)
+        .expect("AsgardDepositEvent not found");
+
     assert_eq!(
         scrypto_decode::<AsgardDepositEvent>(&event_data).unwrap(),
         AsgardDepositEvent {
@@ -191,17 +182,42 @@ fn asgard_vault_swap_and_send() {
     let balance = asgard_vault.get_swapper_balance();
 
     // Act
-    let receipt = asgard_vault.send(
+    let receipt = asgard_vault.transfer_out(
         asgard_vault.signer.badge.clone(),
         asgard_vault.swapper.address,
         XRD,
         dec!(100),
-        send_memo,
+        tx_out_memo.clone(),
     );
 
     // Assert
-    let _result = receipt.expect_commit_success();
+    let result = receipt.expect_commit_success();
+    let events = result.application_events.as_slice();
 
+    let event_data = events
+        .iter()
+        .find(|(type_identifier, _)| {
+            type_identifier.eq(&EventTypeIdentifier(
+                Emitter::Method(
+                    asgard_vault.component_address.into_node_id(),
+                    ModuleId::Main,
+                ),
+                "AsgardTransferOutEvent".to_string(),
+            ))
+        })
+        .map(|(_, data)| data)
+        .expect("AsgardTransferOutEvent not found");
+
+    assert_eq!(
+        scrypto_decode::<AsgardTransferOutEvent>(&event_data).unwrap(),
+        AsgardTransferOutEvent {
+            vault: asgard_vault.component_address,
+            to: asgard_vault.swapper.address,
+            asset: XRD,
+            amount: dec!(100),
+            memo: tx_out_memo,
+        }
+    );
     assert_eq!(balance + dec!(100), asgard_vault.get_swapper_balance());
 }
 
@@ -210,7 +226,7 @@ fn asgard_vault_update_signer_rule() {
     // Arrange
     let mut asgard_vault = AsgardVaultSimulator::new();
     let swap_memo = "SWAP:MAYA.CACAO".to_string();
-    let send_memo = "OUT:".to_string();
+    let tx_out_memo = "OUT:".to_string();
 
     let old_signer_badge = asgard_vault.signer.badge.clone();
 
@@ -219,12 +235,12 @@ fn asgard_vault_update_signer_rule() {
     receipt.expect_commit_success();
 
     // No error expected when using old signer badge
-    let receipt = asgard_vault.send(
+    let receipt = asgard_vault.transfer_out(
         old_signer_badge.clone(),
         asgard_vault.swapper.address,
         XRD,
         dec!(100),
-        send_memo.clone(),
+        tx_out_memo.clone(),
     );
     receipt.expect_commit_success();
 
@@ -233,12 +249,12 @@ fn asgard_vault_update_signer_rule() {
     asgard_vault.update_signer(new_signer);
 
     // Expect AuthError when using old signer badge
-    let receipt = asgard_vault.send(
+    let receipt = asgard_vault.transfer_out(
         old_signer_badge.clone(),
         asgard_vault.swapper.address,
         XRD,
         dec!(100),
-        send_memo.clone(),
+        tx_out_memo.clone(),
     );
     receipt.expect_specific_failure(|e| {
         matches!(
@@ -250,12 +266,12 @@ fn asgard_vault_update_signer_rule() {
     });
 
     // No error expected when using current signer badge
-    let receipt = asgard_vault.send(
+    let receipt = asgard_vault.transfer_out(
         asgard_vault.signer.badge.clone(),
         asgard_vault.swapper.address,
         XRD,
         dec!(100),
-        send_memo,
+        tx_out_memo,
     );
     receipt.expect_commit_success();
 }

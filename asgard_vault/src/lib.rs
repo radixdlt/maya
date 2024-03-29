@@ -10,14 +10,21 @@ mod asgard_vault {
         },
         methods {
             deposit => PUBLIC;
-            signer_send => restrict_to: [signer];
+            transfer_out => restrict_to: [signer];
         }
     }
 
     struct AsgardVault {
-        xrd: Vault,
+        vaults: IndexMap<ResourceAddress, Vault>,
     }
 
+    // TODO:
+    // - consider a potential need to support old and new badge for signer role
+    //   for a given period of time
+    //   eg. old vault which is being retired still accepts
+    //       deposits, and those deposits shall be possible to transfer out.
+    // - consider adding a method that transfers all resources to another AsgardVault
+    //   (old one could be compromised or lacks some features)
     impl AsgardVault {
         pub fn instantiate(
             owner_badge: NonFungibleGlobalId,
@@ -26,7 +33,7 @@ mod asgard_vault {
             let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
 
             Self {
-                xrd: Vault::new(XRD),
+                vaults: IndexMap::new(),
             }
             .instantiate()
             .prepare_to_globalize(owner_role)
@@ -37,12 +44,16 @@ mod asgard_vault {
         }
 
         // Deposit XRD into vault
-        pub fn deposit(&mut self, xrds: Bucket, memo: String) {
-            let amount = xrds.amount();
-            let asset = xrds.resource_address();
+        pub fn deposit(&mut self, bucket: Bucket, memo: String) {
+            let amount = bucket.amount();
+            let asset = bucket.resource_address();
 
-            // TODO: add multiple vaults
-            self.xrd.put(xrds);
+            match self.vaults.get_mut(&asset) {
+                Some(vault) => vault.put(bucket),
+                None => {
+                    self.vaults.insert(asset, Vault::with_bucket(bucket));
+                }
+            }
 
             // Send deposit event to notify Bifrost Observer
             Runtime::emit_event(AsgardDepositEvent {
@@ -57,27 +68,33 @@ mod asgard_vault {
         // Only Bifrost Signer is allowed to call it when finalizing
         // - swap from some asset to XRD
         // - remove liquidity request
-        pub fn signer_send(
+        pub fn transfer_out(
             &mut self,
+            // TODO: make sure this a REAL account, not component.
+            // Malicious component could eg. implement 'try_deposit_or_abort' method
+            // to consume all gas, eg. with busy loop
             address: Global<AnyComponent>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
         ) {
-            let bucket = self.xrd.take(amount);
+            if let Some(vault) = self.vaults.get_mut(&asset) {
+                let bucket = vault.take(amount);
+                let mut account = Account::new(*address.handle());
 
-            let mut account = Account::new(*address.handle());
+                account.try_deposit_or_abort(bucket, None);
 
-            account.try_deposit_or_abort(bucket, None);
-
-            // Send transfer out event to notify Bifrost Observer
-            Runtime::emit_event(AsgardTransferOutEvent {
-                vault: Runtime::global_address(),
-                to: address.address(),
-                asset,
-                amount,
-                memo,
-            });
+                // Send transfer out event to notify Bifrost Observer
+                Runtime::emit_event(AsgardTransferOutEvent {
+                    vault: Runtime::global_address(),
+                    to: address.address(),
+                    asset,
+                    amount,
+                    memo,
+                });
+            } else {
+                panic!("asset {:?} not available in the vault", asset);
+            }
         }
     }
 }
