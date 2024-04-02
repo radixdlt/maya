@@ -89,7 +89,7 @@ impl AsgardVaultSimulator {
                 builder.call_method(
                     self.component_address,
                     "deposit",
-                    manifest_args!(bucket, memo),
+                    manifest_args!(self.swapper.address, bucket, memo),
                 )
             })
             .build();
@@ -170,7 +170,7 @@ fn asgard_vault_swap_and_send() {
     assert_eq!(
         scrypto_decode::<AsgardDepositEvent>(&event_data).unwrap(),
         AsgardDepositEvent {
-            vault: asgard_vault.component_address,
+            sender: asgard_vault.swapper.address,
             asset: XRD,
             amount: dec!(100),
             memo: swap_memo,
@@ -211,8 +211,7 @@ fn asgard_vault_swap_and_send() {
     assert_eq!(
         scrypto_decode::<AsgardTransferOutEvent>(&event_data).unwrap(),
         AsgardTransferOutEvent {
-            vault: asgard_vault.component_address,
-            to: asgard_vault.swapper.address,
+            address: asgard_vault.swapper.address,
             asset: XRD,
             amount: dec!(100),
             memo: tx_out_memo,

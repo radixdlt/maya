@@ -44,7 +44,7 @@ mod asgard_vault {
         }
 
         // Deposit XRD into vault
-        pub fn deposit(&mut self, bucket: Bucket, memo: String) {
+        pub fn deposit(&mut self, sender: ComponentAddress, bucket: Bucket, memo: String) {
             let amount = bucket.amount();
             let asset = bucket.resource_address();
 
@@ -57,7 +57,7 @@ mod asgard_vault {
 
             // Send deposit event to notify Bifrost Observer
             Runtime::emit_event(AsgardDepositEvent {
-                vault: Runtime::global_address(),
+                sender,
                 asset,
                 amount,
                 memo,
@@ -86,8 +86,7 @@ mod asgard_vault {
 
                 // Send transfer out event to notify Bifrost Observer
                 Runtime::emit_event(AsgardTransferOutEvent {
-                    vault: Runtime::global_address(),
-                    to: address.address(),
+                    address: address.address(),
                     asset,
                     amount,
                     memo,
@@ -101,17 +100,16 @@ mod asgard_vault {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AsgardDepositEvent {
-    pub vault: ComponentAddress, // Asgard Vault address
-    pub asset: ResourceAddress,  // Resource address of the deposited assets
-    pub amount: Decimal,         // Amount of the deposited assets
-    pub memo: String,            // Transaction memo
+    pub sender: ComponentAddress, // Address of the deposit sender
+    pub asset: ResourceAddress,   // Resource address of the deposited assets
+    pub amount: Decimal,          // Amount of the deposited assets
+    pub memo: String,             // Transaction memo
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AsgardTransferOutEvent {
-    pub vault: ComponentAddress, // Asgard Vault address
-    pub to: ComponentAddress,    // Address where to transfer to
-    pub asset: ResourceAddress,  // Resource address of the transferred assets
-    pub amount: Decimal,         // Amount of the transferred assets
-    pub memo: String,            // Transaction memo
+    pub address: ComponentAddress, // Address where to transfer to
+    pub asset: ResourceAddress,    // Resource address of the transferred assets
+    pub amount: Decimal,           // Amount of the transferred assets
+    pub memo: String,              // Transaction memo
 }
