@@ -29,6 +29,7 @@ struct MayaRouterSimulator {
     pub _owner: User,
     pub signer: User,
     pub swapper: User,
+    pub resources: IndexMap<String, ResourceAddress>,
 }
 
 impl MayaRouterSimulator {
@@ -66,6 +67,21 @@ impl MayaRouterSimulator {
 
         let signer_rule = rule!(require(signer.badge.clone()));
 
+        let mut resources = indexmap!();
+        resources.insert("XRD".to_string(), XRD);
+        for symbol in ["USDT", "ETH"] {
+            resources.insert(
+                symbol.to_string(),
+                ledger.create_fungible_resource(dec!(20000), 18, swapper.address),
+            );
+        }
+        for symbol in ["BTC", "SOL"] {
+            resources.insert(
+                symbol.to_string(),
+                ledger.create_fungible_resource(dec!(20000), 18, owner.address),
+            );
+        }
+
         let receipt = Self::create_component(&mut ledger, owner.badge.clone(), signer_rule);
         let component_address = receipt.expect_commit_success().new_component_addresses()[0];
         Self {
@@ -74,17 +90,24 @@ impl MayaRouterSimulator {
             _owner: owner,
             signer,
             swapper,
+            resources,
         }
     }
 
-    pub fn get_swapper_balance(&mut self) -> Decimal {
-        self.ledger.get_component_balance(self.swapper.address, XRD)
+    pub fn get_swapper_balance(&mut self, asset: ResourceAddress) -> Decimal {
+        self.ledger
+            .get_component_balance(self.swapper.address, asset)
     }
 
-    pub fn deposit(&mut self, amount: Decimal, memo: String) -> TransactionReceipt {
+    pub fn deposit(
+        &mut self,
+        asset: ResourceAddress,
+        amount: Decimal,
+        memo: String,
+    ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
-            .withdraw_from_account(self.swapper.address, XRD, amount)
-            .take_all_from_worktop(XRD, "bucket")
+            .withdraw_from_account(self.swapper.address, asset, amount)
+            .take_all_from_worktop(asset, "bucket")
             .with_bucket("bucket", |builder, bucket| {
                 builder.call_method(
                     self.component_address,
@@ -137,7 +160,7 @@ impl MayaRouterSimulator {
 }
 
 #[test]
-fn maya_router_swap_and_send() {
+fn maya_router_swap_and_send_success() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -147,7 +170,7 @@ fn maya_router_swap_and_send() {
 
     // Perform Swap
     // Act
-    let receipt = maya_router.deposit(dec!(100), swap_memo.clone());
+    let receipt = maya_router.deposit(XRD, dec!(100), swap_memo.clone());
 
     // Assert
     let result = receipt.expect_commit_success();
@@ -176,7 +199,7 @@ fn maya_router_swap_and_send() {
 
     // Perform Send
     // Arrange
-    let balance = maya_router.get_swapper_balance();
+    let balance = maya_router.get_swapper_balance(XRD);
 
     // Act
     let receipt = maya_router.transfer_out(
@@ -211,7 +234,42 @@ fn maya_router_swap_and_send() {
             memo: tx_out_memo,
         }
     );
-    assert_eq!(balance + dec!(100), maya_router.get_swapper_balance());
+    assert_eq!(balance + dec!(100), maya_router.get_swapper_balance(XRD));
+}
+
+#[test]
+fn maya_router_swap_and_send_fail() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+
+    // Act
+    let swap_memo = "SWAP:MAYA.CACAO".to_string();
+    let tx_out_memo = "OUT:".to_string();
+
+    // Perform Swap
+    // Act
+    let receipt = maya_router.deposit(XRD, dec!(100), swap_memo.clone());
+
+    // Assert
+    receipt.expect_commit_success();
+
+    // Perform Send of non-existing asset
+    // Act
+    let receipt = maya_router.transfer_out(
+        maya_router.signer.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo.clone(),
+    );
+
+    // Assert
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("not available in the vault")
+        }
+        _ => false,
+    });
 }
 
 #[test]
@@ -224,7 +282,7 @@ fn maya_router_update_signer_rule() {
     let old_signer_badge = maya_router.signer.badge.clone();
 
     // Act
-    let receipt = maya_router.deposit(dec!(1000), swap_memo);
+    let receipt = maya_router.deposit(XRD, dec!(1000), swap_memo);
     receipt.expect_commit_success();
 
     // No error expected when using old signer badge

@@ -92,7 +92,7 @@ mod maya_router {
                     memo,
                 });
             } else {
-                panic!("asset {:?} not available in the vault", asset);
+                Runtime::panic(format!("asset {:?} not available in the vault", asset));
             }
         }
     }
