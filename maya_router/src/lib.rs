@@ -1,8 +1,8 @@
 use scrypto::prelude::*;
 
 #[blueprint]
-#[events(AsgardDepositEvent, AsgardTransferOutEvent)]
-mod asgard_vault {
+#[events(MayaRouterDepositEvent, MayaRouterTransferOutEvent)]
+mod maya_router {
     enable_method_auth! {
         roles {
             // Bifrost Signer is allowed to perform finalized transactions
@@ -14,7 +14,7 @@ mod asgard_vault {
         }
     }
 
-    struct AsgardVault {
+    struct MayaRouter {
         vaults: IndexMap<ResourceAddress, Vault>,
     }
 
@@ -23,13 +23,13 @@ mod asgard_vault {
     //   for a given period of time
     //   eg. old vault which is being retired still accepts
     //       deposits, and those deposits shall be possible to transfer out.
-    // - consider adding a method that transfers all resources to another AsgardVault
+    // - consider adding a method that transfers all resources to another MayaRouter
     //   (old one could be compromised or lacks some features)
-    impl AsgardVault {
+    impl MayaRouter {
         pub fn instantiate(
             owner_badge: NonFungibleGlobalId,
             signer_rule: AccessRule,
-        ) -> Global<AsgardVault> {
+        ) -> Global<MayaRouter> {
             let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
 
             Self {
@@ -56,7 +56,7 @@ mod asgard_vault {
             }
 
             // Send deposit event to notify Bifrost Observer
-            Runtime::emit_event(AsgardDepositEvent {
+            Runtime::emit_event(MayaRouterDepositEvent {
                 sender,
                 asset,
                 amount,
@@ -85,7 +85,7 @@ mod asgard_vault {
                 account.try_deposit_or_abort(bucket, None);
 
                 // Send transfer out event to notify Bifrost Observer
-                Runtime::emit_event(AsgardTransferOutEvent {
+                Runtime::emit_event(MayaRouterTransferOutEvent {
                     address: address.address(),
                     asset,
                     amount,
@@ -99,7 +99,7 @@ mod asgard_vault {
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AsgardDepositEvent {
+pub struct MayaRouterDepositEvent {
     pub sender: ComponentAddress, // Address of the deposit sender
     pub asset: ResourceAddress,   // Resource address of the deposited assets
     pub amount: Decimal,          // Amount of the deposited assets
@@ -107,7 +107,7 @@ pub struct AsgardDepositEvent {
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AsgardTransferOutEvent {
+pub struct MayaRouterTransferOutEvent {
     pub address: ComponentAddress, // Address where to transfer to
     pub asset: ResourceAddress,    // Resource address of the transferred assets
     pub amount: Decimal,           // Amount of the transferred assets

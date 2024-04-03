@@ -1,4 +1,4 @@
-use asgard_vault::{AsgardDepositEvent, AsgardTransferOutEvent};
+use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -23,7 +23,7 @@ impl User {
     }
 }
 
-struct AsgardVaultSimulator {
+struct MayaRouterSimulator {
     pub ledger: DefaultLedgerSimulator,
     pub component_address: ComponentAddress,
     pub _owner: User,
@@ -31,8 +31,8 @@ struct AsgardVaultSimulator {
     pub swapper: User,
 }
 
-impl AsgardVaultSimulator {
-    const BLUEPRINT_NAME: &'static str = "AsgardVault";
+impl MayaRouterSimulator {
+    const BLUEPRINT_NAME: &'static str = "MayaRouter";
 
     pub fn manifest_builder() -> ManifestBuilder {
         ManifestBuilder::new().lock_fee_from_faucet()
@@ -137,9 +137,9 @@ impl AsgardVaultSimulator {
 }
 
 #[test]
-fn asgard_vault_swap_and_send() {
+fn maya_router_swap_and_send() {
     // Arrange
-    let mut asgard_vault = AsgardVaultSimulator::new();
+    let mut maya_router = MayaRouterSimulator::new();
 
     // Act
     let swap_memo = "SWAP:MAYA.CACAO".to_string();
@@ -147,7 +147,7 @@ fn asgard_vault_swap_and_send() {
 
     // Perform Swap
     // Act
-    let receipt = asgard_vault.deposit(dec!(100), swap_memo.clone());
+    let receipt = maya_router.deposit(dec!(100), swap_memo.clone());
 
     // Assert
     let result = receipt.expect_commit_success();
@@ -157,20 +157,17 @@ fn asgard_vault_swap_and_send() {
         .iter()
         .find(|(type_identifier, _)| {
             type_identifier.eq(&EventTypeIdentifier(
-                Emitter::Method(
-                    asgard_vault.component_address.into_node_id(),
-                    ModuleId::Main,
-                ),
-                "AsgardDepositEvent".to_string(),
+                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
+                "MayaRouterDepositEvent".to_string(),
             ))
         })
         .map(|(_, data)| data)
-        .expect("AsgardDepositEvent not found");
+        .expect("MayaRouterDepositEvent not found");
 
     assert_eq!(
-        scrypto_decode::<AsgardDepositEvent>(&event_data).unwrap(),
-        AsgardDepositEvent {
-            sender: asgard_vault.swapper.address,
+        scrypto_decode::<MayaRouterDepositEvent>(&event_data).unwrap(),
+        MayaRouterDepositEvent {
+            sender: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
             memo: swap_memo,
@@ -179,12 +176,12 @@ fn asgard_vault_swap_and_send() {
 
     // Perform Send
     // Arrange
-    let balance = asgard_vault.get_swapper_balance();
+    let balance = maya_router.get_swapper_balance();
 
     // Act
-    let receipt = asgard_vault.transfer_out(
-        asgard_vault.signer.badge.clone(),
-        asgard_vault.swapper.address,
+    let receipt = maya_router.transfer_out(
+        maya_router.signer.badge.clone(),
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         tx_out_memo.clone(),
@@ -198,45 +195,42 @@ fn asgard_vault_swap_and_send() {
         .iter()
         .find(|(type_identifier, _)| {
             type_identifier.eq(&EventTypeIdentifier(
-                Emitter::Method(
-                    asgard_vault.component_address.into_node_id(),
-                    ModuleId::Main,
-                ),
-                "AsgardTransferOutEvent".to_string(),
+                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
+                "MayaRouterTransferOutEvent".to_string(),
             ))
         })
         .map(|(_, data)| data)
-        .expect("AsgardTransferOutEvent not found");
+        .expect("MayaRouterTransferOutEvent not found");
 
     assert_eq!(
-        scrypto_decode::<AsgardTransferOutEvent>(&event_data).unwrap(),
-        AsgardTransferOutEvent {
-            address: asgard_vault.swapper.address,
+        scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
+        MayaRouterTransferOutEvent {
+            address: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
             memo: tx_out_memo,
         }
     );
-    assert_eq!(balance + dec!(100), asgard_vault.get_swapper_balance());
+    assert_eq!(balance + dec!(100), maya_router.get_swapper_balance());
 }
 
 #[test]
-fn asgard_vault_update_signer_rule() {
+fn maya_router_update_signer_rule() {
     // Arrange
-    let mut asgard_vault = AsgardVaultSimulator::new();
+    let mut maya_router = MayaRouterSimulator::new();
     let swap_memo = "SWAP:MAYA.CACAO".to_string();
     let tx_out_memo = "OUT:".to_string();
 
-    let old_signer_badge = asgard_vault.signer.badge.clone();
+    let old_signer_badge = maya_router.signer.badge.clone();
 
     // Act
-    let receipt = asgard_vault.deposit(dec!(1000), swap_memo);
+    let receipt = maya_router.deposit(dec!(1000), swap_memo);
     receipt.expect_commit_success();
 
     // No error expected when using old signer badge
-    let receipt = asgard_vault.transfer_out(
+    let receipt = maya_router.transfer_out(
         old_signer_badge.clone(),
-        asgard_vault.swapper.address,
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         tx_out_memo.clone(),
@@ -244,13 +238,13 @@ fn asgard_vault_update_signer_rule() {
     receipt.expect_commit_success();
 
     // Update signer rule
-    let new_signer = User::new(&mut asgard_vault.ledger);
-    asgard_vault.update_signer(new_signer);
+    let new_signer = User::new(&mut maya_router.ledger);
+    maya_router.update_signer(new_signer);
 
     // Expect AuthError when using old signer badge
-    let receipt = asgard_vault.transfer_out(
+    let receipt = maya_router.transfer_out(
         old_signer_badge.clone(),
-        asgard_vault.swapper.address,
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         tx_out_memo.clone(),
@@ -265,9 +259,9 @@ fn asgard_vault_update_signer_rule() {
     });
 
     // No error expected when using current signer badge
-    let receipt = asgard_vault.transfer_out(
-        asgard_vault.signer.badge.clone(),
-        asgard_vault.swapper.address,
+    let receipt = maya_router.transfer_out(
+        maya_router.signer.badge.clone(),
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         tx_out_memo,

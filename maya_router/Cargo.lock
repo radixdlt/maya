@@ -31,16 +31,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
 
 [[package]]
-name = "asgard_vault"
-version = "1.2.0-dev"
-dependencies = [
- "radix-engine",
- "sbor",
- "scrypto",
- "scrypto-test",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,6 +583,16 @@ checksum = "3c168f8615b12bc01f9c17e2eb0cc07dcae1940121185446edc3744920e8ef45"
 dependencies = [
  "autocfg",
  "scopeguard",
+]
+
+[[package]]
+name = "maya_router"
+version = "1.2.0-dev"
+dependencies = [
+ "radix-engine",
+ "sbor",
+ "scrypto",
+ "scrypto-test",
 ]
 
 [[package]]
