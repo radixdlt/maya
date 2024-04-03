@@ -123,6 +123,7 @@ impl MayaRouterSimulator {
     // Only signer can call it
     pub fn transfer_out(
         &mut self,
+        sender: ComponentAddress,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
         asset: ResourceAddress,
@@ -133,7 +134,7 @@ impl MayaRouterSimulator {
             .call_method(
                 self.component_address,
                 "transfer_out",
-                manifest_args!(to, asset, amount, memo),
+                manifest_args!(sender, to, asset, amount, memo),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
@@ -203,6 +204,7 @@ fn maya_router_swap_and_send_success() {
 
     // Act
     let receipt = maya_router.transfer_out(
+        maya_router.signer.address,
         maya_router.signer.badge.clone(),
         maya_router.swapper.address,
         XRD,
@@ -228,6 +230,7 @@ fn maya_router_swap_and_send_success() {
     assert_eq!(
         scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
         MayaRouterTransferOutEvent {
+            sender: maya_router.signer.address,
             address: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
@@ -256,6 +259,7 @@ fn maya_router_swap_and_send_fail() {
     // Perform Send of non-existing asset
     // Act
     let receipt = maya_router.transfer_out(
+        maya_router.signer.address,
         maya_router.signer.badge.clone(),
         maya_router.swapper.address,
         *maya_router.resources.get("USDT").unwrap(),
@@ -287,6 +291,7 @@ fn maya_router_update_signer_rule() {
 
     // No error expected when using old signer badge
     let receipt = maya_router.transfer_out(
+        maya_router.signer.address,
         old_signer_badge.clone(),
         maya_router.swapper.address,
         XRD,
@@ -301,6 +306,7 @@ fn maya_router_update_signer_rule() {
 
     // Expect AuthError when using old signer badge
     let receipt = maya_router.transfer_out(
+        maya_router.signer.address,
         old_signer_badge.clone(),
         maya_router.swapper.address,
         XRD,
@@ -318,6 +324,7 @@ fn maya_router_update_signer_rule() {
 
     // No error expected when using current signer badge
     let receipt = maya_router.transfer_out(
+        maya_router.signer.address,
         maya_router.signer.badge.clone(),
         maya_router.swapper.address,
         XRD,

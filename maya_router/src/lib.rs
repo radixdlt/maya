@@ -70,6 +70,7 @@ mod maya_router {
         // - remove liquidity request
         pub fn transfer_out(
             &mut self,
+            sender: ComponentAddress,
             // TODO: make sure this a REAL account, not component.
             // Malicious component could eg. implement 'try_deposit_or_abort' method
             // to consume all gas, eg. with busy loop
@@ -86,6 +87,7 @@ mod maya_router {
 
                 // Send transfer out event to notify Bifrost Observer
                 Runtime::emit_event(MayaRouterTransferOutEvent {
+                    sender,
                     address: address.address(),
                     asset,
                     amount,
@@ -108,8 +110,9 @@ pub struct MayaRouterDepositEvent {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterTransferOutEvent {
+    pub sender: ComponentAddress, // Address of the sender (must have the "signer" role)
     pub address: ComponentAddress, // Address where to transfer to
-    pub asset: ResourceAddress,    // Resource address of the transferred assets
-    pub amount: Decimal,           // Amount of the transferred assets
-    pub memo: String,              // Transaction memo
+    pub asset: ResourceAddress,   // Resource address of the transferred assets
+    pub amount: Decimal,          // Amount of the transferred assets
+    pub memo: String,             // Transaction memo
 }
