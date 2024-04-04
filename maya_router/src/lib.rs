@@ -71,9 +71,6 @@ mod maya_router {
         pub fn transfer_out(
             &mut self,
             sender: ComponentAddress,
-            // TODO: make sure this a REAL account, not component.
-            // Malicious component could eg. implement 'try_deposit_or_abort' method
-            // to consume all gas, eg. with busy loop
             address: Global<AnyComponent>,
             asset: ResourceAddress,
             amount: Decimal,
@@ -81,6 +78,17 @@ mod maya_router {
         ) {
             if let Some(vault) = self.vaults.get_mut(&asset) {
                 let bucket = vault.take(amount);
+
+                // Make sure address is a real account, not component.
+                // Malicious component could eg. implement 'try_deposit_or_abort' method
+                // to consume all gas, eg. with busy loop
+                if address.blueprint_id().package_address != ACCOUNT_PACKAGE {
+                    Runtime::panic(format!(
+                        "address {:?} is not a real account",
+                        ComponentAddress::try_from(address.handle().as_node_id().as_bytes())
+                            .unwrap()
+                    ));
+                }
                 let mut account = Account::new(*address.handle());
 
                 account.try_deposit_or_abort(bucket, None);
