@@ -22,7 +22,7 @@ mod maya_router {
 
     struct MayaRouter {
         admin: ComponentAddress,
-        vaults: IndexMap<ResourceAddress, Vault>,
+        vaults: KeyValueStore<ResourceAddress, Vault>,
     }
 
     // TODO:
@@ -42,7 +42,7 @@ mod maya_router {
 
             Self {
                 admin: admin.address(),
-                vaults: IndexMap::new(),
+                vaults: KeyValueStore::new(),
             }
             .instantiate()
             .prepare_to_globalize(owner_role)
@@ -77,11 +77,17 @@ mod maya_router {
             let amount = bucket.amount();
             let asset = bucket.resource_address();
 
-            match self.vaults.get_mut(&asset) {
-                Some(vault) => vault.put(bucket),
-                None => {
-                    self.vaults.insert(asset, Vault::with_bucket(bucket));
-                }
+            let exists = if let Some(_) = self.vaults.get(&asset) {
+                true
+            } else {
+                false
+            };
+
+            if exists {
+                let mut vault = self.vaults.get_mut(&asset).unwrap();
+                vault.put(bucket);
+            } else {
+                self.vaults.insert(asset, Vault::with_bucket(bucket));
             }
 
             // Send deposit event to notify Bifrost Observer
@@ -124,7 +130,7 @@ mod maya_router {
                 ));
             }
 
-            if let Some(vault) = self.vaults.get_mut(&asset) {
+            if let Some(mut vault) = self.vaults.get_mut(&asset) {
                 let bucket = vault.take(amount);
 
                 let mut account = Account::new(*receiver.handle());
