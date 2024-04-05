@@ -1,6 +1,6 @@
 [package]
 name = "maya_router"
-version = "1.2.0-dev"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]
@@ -10,7 +10,6 @@ scrypto = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e
 
 [dev-dependencies]
 scrypto-test = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
-radix-engine = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
 
 [profile.release]
 opt-level = 'z'        # Optimize for size.

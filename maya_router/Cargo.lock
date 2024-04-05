@@ -587,9 +587,8 @@ dependencies = [
 
 [[package]]
 name = "maya_router"
-version = "1.2.0-dev"
+version = "1.0.0"
 dependencies = [
- "radix-engine",
  "sbor",
  "scrypto",
  "scrypto-test",
