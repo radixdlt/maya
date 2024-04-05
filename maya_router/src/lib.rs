@@ -4,28 +4,28 @@ use scrypto::prelude::*;
 #[events(
     MayaRouterDepositEvent,
     MayaRouterTransferOutEvent,
-    MayaRouterUpdateSignerEvent
+    MayaRouterUpdateAdminEvent
 )]
 mod maya_router {
     enable_method_auth! {
         roles {
             // Bifrost Signer is allowed to perform finalized transactions
-            signer => updatable_by: [SELF];
+            admin => updatable_by: [SELF];
         },
         methods {
             deposit => PUBLIC;
-            transfer_out => restrict_to: [signer];
-            update_signer => restrict_to: [signer];
+            transfer_out => restrict_to: [admin];
+            update_admin => restrict_to: [admin];
         }
     }
 
     struct MayaRouter {
-        signer: ComponentAddress,
+        admin: ComponentAddress,
         vaults: IndexMap<ResourceAddress, Vault>,
     }
 
     // TODO:
-    // - consider a potential need to support old and new badge for signer role
+    // - consider a potential need to support old and new badge for "admin" role
     //   for a given period of time
     //   eg. old vault which is being retired still accepts
     //       deposits, and those deposits shall be possible to transfer out.
@@ -34,32 +34,32 @@ mod maya_router {
     impl MayaRouter {
         pub fn instantiate(
             owner_badge: NonFungibleGlobalId,
-            signer_rule: AccessRule,
-            signer: Global<AnyComponent>,
+            admin_rule: AccessRule,
+            admin: Global<AnyComponent>,
         ) -> Global<MayaRouter> {
             let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
 
             Self {
-                signer: signer.address(),
+                admin: admin.address(),
                 vaults: IndexMap::new(),
             }
             .instantiate()
             .prepare_to_globalize(owner_role)
             .roles(roles! {
-                signer => signer_rule;
+                admin => admin_rule;
             })
             .globalize()
         }
 
-        pub fn update_signer(&mut self, signer_rule: AccessRule, signer: Global<AnyComponent>) {
-            Runtime::global_component().set_role("signer", signer_rule);
+        pub fn update_admin(&mut self, admin_rule: AccessRule, admin: Global<AnyComponent>) {
+            Runtime::global_component().set_role("admin", admin_rule);
 
-            // Send update signer event to notify Bifrost Observer
-            Runtime::emit_event(MayaRouterUpdateSignerEvent {
-                previous_signer: self.signer,
-                current_signer: signer.address(),
+            // Send update admin event to notify Bifrost Observer
+            Runtime::emit_event(MayaRouterUpdateAdminEvent {
+                previous_admin: self.admin,
+                current_admin: admin.address(),
             });
-            self.signer = signer.address();
+            self.admin = admin.address();
         }
 
         // Deposit some assets
@@ -90,7 +90,7 @@ mod maya_router {
         }
 
         // Send some amount of given asset to given address (only Bifrost Signer is allowed to call it).
-        //   sender  - Address of the account, which currently controls the vault (has "signer" role)
+        //   sender  - Address of the account, which currently controls the vault (has "admin" role)
         //   address - Address where to send assets
         //   asset   - Resource address of the asset to send
         //   amount  - amount of asset to send
@@ -148,7 +148,7 @@ pub struct MayaRouterDepositEvent {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterTransferOutEvent {
-    pub sender: ComponentAddress, // Address of the sender (must have the "signer" role)
+    pub sender: ComponentAddress, // Address of the sender (must have the "admin" role)
     pub address: ComponentAddress, // Address where to transfer to
     pub asset: ResourceAddress,   // Resource address of the transferred assets
     pub amount: Decimal,          // Amount of the transferred assets
@@ -156,7 +156,7 @@ pub struct MayaRouterTransferOutEvent {
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MayaRouterUpdateSignerEvent {
-    pub previous_signer: ComponentAddress, // Address of the previous signer
-    pub current_signer: ComponentAddress,  // Address of the current signer
+pub struct MayaRouterUpdateAdminEvent {
+    pub previous_admin: ComponentAddress, // Address of the previous admin
+    pub current_admin: ComponentAddress,  // Address of the current admin
 }

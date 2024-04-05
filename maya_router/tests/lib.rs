@@ -1,6 +1,4 @@
-use maya_router::{
-    MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterUpdateSignerEvent,
-};
+use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterUpdateAdminEvent};
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -29,7 +27,7 @@ struct MayaRouterSimulator {
     pub ledger: DefaultLedgerSimulator,
     pub component_address: ComponentAddress,
     pub _owner: User,
-    pub signer: User,
+    pub admin: User,
     pub swapper: User,
     pub resources: IndexMap<String, ResourceAddress>,
 }
@@ -44,8 +42,8 @@ impl MayaRouterSimulator {
     pub fn create_component(
         ledger: &mut DefaultLedgerSimulator,
         owner_badge: NonFungibleGlobalId,
-        signer_rule: AccessRule,
-        signer: ComponentAddress,
+        admin_rule: AccessRule,
+        admin: ComponentAddress,
     ) -> TransactionReceipt {
         let package_address = ledger.compile_and_publish(this_package!());
         ledger.execute_manifest(
@@ -54,7 +52,7 @@ impl MayaRouterSimulator {
                     package_address,
                     Self::BLUEPRINT_NAME,
                     "instantiate",
-                    manifest_args!(owner_badge, signer_rule, signer),
+                    manifest_args!(owner_badge, admin_rule, admin),
                 )
                 .build(),
             vec![],
@@ -65,10 +63,10 @@ impl MayaRouterSimulator {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
         let owner = User::new(&mut ledger);
-        let signer = User::new(&mut ledger);
+        let admin = User::new(&mut ledger);
         let swapper = User::new(&mut ledger);
 
-        let signer_rule = rule!(require(signer.badge.clone()));
+        let admin_rule = rule!(require(admin.badge.clone()));
 
         let mut resources = indexmap!();
         resources.insert("XRD".to_string(), XRD);
@@ -85,18 +83,14 @@ impl MayaRouterSimulator {
             );
         }
 
-        let receipt = Self::create_component(
-            &mut ledger,
-            owner.badge.clone(),
-            signer_rule,
-            signer.address,
-        );
+        let receipt =
+            Self::create_component(&mut ledger, owner.badge.clone(), admin_rule, admin.address);
         let component_address = receipt.expect_commit_success().new_component_addresses()[0];
         Self {
             ledger,
             component_address,
             _owner: owner,
-            signer,
+            admin,
             swapper,
             resources,
         }
@@ -128,7 +122,7 @@ impl MayaRouterSimulator {
             .execute_manifest(manifest, vec![self.swapper.badge.clone()])
     }
 
-    // Only signer can call it
+    // Only admin can call it
     pub fn transfer_out(
         &mut self,
         sender: ComponentAddress,
@@ -148,17 +142,17 @@ impl MayaRouterSimulator {
         self.ledger.execute_manifest(manifest, vec![badge])
     }
 
-    pub fn update_signer(&mut self, new_signer: &User) -> TransactionReceipt {
-        let new_signer_rule = rule!(require(new_signer.badge.clone()));
+    pub fn update_admin(&mut self, new_admin: &User) -> TransactionReceipt {
+        let new_admin_rule = rule!(require(new_admin.badge.clone()));
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
-                "update_signer",
-                manifest_args!(new_signer_rule, new_signer.address),
+                "update_admin",
+                manifest_args!(new_admin_rule, new_admin.address),
             )
             .build();
         self.ledger
-            .execute_manifest(manifest, vec![self.signer.badge.clone()])
+            .execute_manifest(manifest, vec![self.admin.badge.clone()])
     }
 }
 
@@ -206,8 +200,8 @@ fn maya_router_swap_and_send_success() {
 
     // Act
     let receipt = maya_router.transfer_out(
-        maya_router.signer.address,
-        maya_router.signer.badge.clone(),
+        maya_router.admin.address,
+        maya_router.admin.badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
@@ -232,7 +226,7 @@ fn maya_router_swap_and_send_success() {
     assert_eq!(
         scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
         MayaRouterTransferOutEvent {
-            sender: maya_router.signer.address,
+            sender: maya_router.admin.address,
             address: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
@@ -261,8 +255,8 @@ fn maya_router_swap_and_send_fail() {
     // Perform Send of non-existing asset
     // Act
     let receipt = maya_router.transfer_out(
-        maya_router.signer.address,
-        maya_router.signer.badge.clone(),
+        maya_router.admin.address,
+        maya_router.admin.badge.clone(),
         maya_router.swapper.address,
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
@@ -279,22 +273,22 @@ fn maya_router_swap_and_send_fail() {
 }
 
 #[test]
-fn maya_router_update_signer_rule() {
+fn maya_router_update_admin_rule() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
     let swap_memo = "SWAP:MAYA.CACAO".to_string();
     let tx_out_memo = "OUT:".to_string();
 
-    let old_signer_badge = maya_router.signer.badge.clone();
+    let old_admin_badge = maya_router.admin.badge.clone();
 
     // Act
     let receipt = maya_router.deposit(XRD, dec!(1000), swap_memo);
     receipt.expect_commit_success();
 
-    // No error expected when using old signer badge
+    // No error expected when using old admin badge
     let receipt = maya_router.transfer_out(
-        maya_router.signer.address,
-        old_signer_badge.clone(),
+        maya_router.admin.address,
+        old_admin_badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
@@ -302,9 +296,9 @@ fn maya_router_update_signer_rule() {
     );
     receipt.expect_commit_success();
 
-    // Update signer rule
-    let new_signer = User::new(&mut maya_router.ledger);
-    let receipt = maya_router.update_signer(&new_signer);
+    // Update admin rule
+    let new_admin = User::new(&mut maya_router.ledger);
+    let receipt = maya_router.update_admin(&new_admin);
     let result = receipt.expect_commit_success();
     let events = result.application_events.as_slice();
 
@@ -313,24 +307,24 @@ fn maya_router_update_signer_rule() {
         .find(|(type_identifier, _)| {
             type_identifier.eq(&EventTypeIdentifier(
                 Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
-                "MayaRouterUpdateSignerEvent".to_string(),
+                "MayaRouterUpdateAdminEvent".to_string(),
             ))
         })
         .map(|(_, data)| data)
-        .expect("MayaRouterUpdateSignerEvent not found");
+        .expect("MayaRouterUpdateAdminEvent not found");
     assert_eq!(
-        scrypto_decode::<MayaRouterUpdateSignerEvent>(&event_data).unwrap(),
-        MayaRouterUpdateSignerEvent {
-            previous_signer: maya_router.signer.address,
-            current_signer: new_signer.address,
+        scrypto_decode::<MayaRouterUpdateAdminEvent>(&event_data).unwrap(),
+        MayaRouterUpdateAdminEvent {
+            previous_admin: maya_router.admin.address,
+            current_admin: new_admin.address,
         }
     );
-    maya_router.signer = new_signer;
+    maya_router.admin = new_admin;
 
-    // Expect AuthError when using old signer badge
+    // Expect AuthError when using old admin badge
     let receipt = maya_router.transfer_out(
-        maya_router.signer.address,
-        old_signer_badge.clone(),
+        maya_router.admin.address,
+        old_admin_badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
@@ -345,10 +339,10 @@ fn maya_router_update_signer_rule() {
         )
     });
 
-    // No error expected when using current signer badge
+    // No error expected when using current admin badge
     let receipt = maya_router.transfer_out(
-        maya_router.signer.address,
-        maya_router.signer.badge.clone(),
+        maya_router.admin.address,
+        maya_router.admin.badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
