@@ -188,6 +188,7 @@ fn maya_router_swap_and_send_success() {
         scrypto_decode::<MayaRouterDepositEvent>(&event_data).unwrap(),
         MayaRouterDepositEvent {
             sender: maya_router.swapper.address,
+            receiver: maya_router.admin.address,
             asset: XRD,
             amount: dec!(100),
             memo: swap_memo,
@@ -227,7 +228,7 @@ fn maya_router_swap_and_send_success() {
         scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
         MayaRouterTransferOutEvent {
             sender: maya_router.admin.address,
-            address: maya_router.swapper.address,
+            receiver: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
             memo: tx_out_memo,

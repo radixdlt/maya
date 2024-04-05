@@ -51,6 +51,9 @@ mod maya_router {
             .globalize()
         }
 
+        // Update "admin" role
+        //   admin_rule - new access rule
+        //   admin      - new admin account address
         pub fn update_admin(&mut self, admin_rule: AccessRule, admin: Global<AnyComponent>) {
             Runtime::global_component().set_role("admin", admin_rule);
 
@@ -83,6 +86,7 @@ mod maya_router {
             // Send deposit event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterDepositEvent {
                 sender: sender.address(),
+                receiver: self.admin,
                 asset,
                 amount,
                 memo,
@@ -90,15 +94,15 @@ mod maya_router {
         }
 
         // Send some amount of given asset to given address (only Bifrost Signer is allowed to call it).
-        //   sender  - Address of the account, which currently controls the vault (has "admin" role)
-        //   address - Address where to send assets
-        //   asset   - Resource address of the asset to send
-        //   amount  - amount of asset to send
-        //   memo    - message to emit when emitting sending the assets
+        //   sender   - Address of the account, which currently controls the vault (has "admin" role)
+        //   receiver - Address where to send assets (must be a real account)
+        //   asset    - Resource address of the asset to send
+        //   amount   - amount of asset to send
+        //   memo     - message to emit when emitting sending the assets
         pub fn transfer_out(
             &mut self,
             sender: Global<AnyComponent>,
-            address: Global<AnyComponent>,
+            receiver: Global<AnyComponent>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
@@ -106,27 +110,27 @@ mod maya_router {
             // Make sure sender is the one that calls this method
             Runtime::assert_access_rule(sender.get_owner_role().rule);
 
-            // Make sure address is a real account, not component.
+            // Make sure receiver is a real account, not component.
             // Malicious component could eg. implement 'try_deposit_or_abort' method
             // to consume all gas, eg. with busy loop
-            if address.blueprint_id().package_address != ACCOUNT_PACKAGE {
+            if receiver.blueprint_id().package_address != ACCOUNT_PACKAGE {
                 Runtime::panic(format!(
                     "address {:?} is not a real account",
-                    ComponentAddress::try_from(address.handle().as_node_id().as_bytes()).unwrap()
+                    ComponentAddress::try_from(receiver.handle().as_node_id().as_bytes()).unwrap()
                 ));
             }
 
             if let Some(mut vault) = self.vaults.get_mut(&asset) {
                 let bucket = vault.take(amount);
 
-                let mut account = Account::new(*address.handle());
+                let mut account = Account::new(*receiver.handle());
 
                 account.try_deposit_or_abort(bucket, None);
 
                 // Send transfer out event to notify Bifrost Observer
                 Runtime::emit_event(MayaRouterTransferOutEvent {
                     sender: sender.address(),
-                    address: address.address(),
+                    receiver: receiver.address(),
                     asset,
                     amount,
                     memo,
@@ -140,16 +144,17 @@ mod maya_router {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterDepositEvent {
-    pub sender: ComponentAddress, // Address of the deposit sender
-    pub asset: ResourceAddress,   // Resource address of the deposited assets
-    pub amount: Decimal,          // Amount of the deposited assets
-    pub memo: String,             // Transaction memo
+    pub sender: ComponentAddress,   // Address of the deposit sender
+    pub receiver: ComponentAddress, // Address of the account, which currently controls the vault (has "admin" role)
+    pub asset: ResourceAddress,     // Resource address of the deposited assets
+    pub amount: Decimal,            // Amount of the deposited assets
+    pub memo: String,               // Transaction memo
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterTransferOutEvent {
-    pub sender: ComponentAddress, // Address of the sender (must have the "admin" role)
-    pub address: ComponentAddress, // Address where to transfer to
+    pub sender: ComponentAddress, // Address of the account, which currently controls the vault (has "admin" role)
+    pub receiver: ComponentAddress, // Address where assets were transferred
     pub asset: ResourceAddress,   // Resource address of the transferred assets
     pub amount: Decimal,          // Amount of the transferred assets
     pub memo: String,             // Transaction memo
@@ -157,6 +162,6 @@ pub struct MayaRouterTransferOutEvent {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterUpdateAdminEvent {
-    pub previous_admin: ComponentAddress, // Address of the previous admin
-    pub current_admin: ComponentAddress,  // Address of the current admin
+    pub previous_admin: ComponentAddress, // Address of the previous admin account
+    pub current_admin: ComponentAddress,  // Address of the current admin account
 }
