@@ -120,7 +120,7 @@ mod maya_router {
                 ));
             }
 
-            if let Some(mut vault) = self.vaults.get_mut(&asset) {
+            if let Some(vault) = self.vaults.get_mut(&asset) {
                 let bucket = vault.take(amount);
 
                 let mut account = Account::new(*receiver.handle());
