@@ -1,20 +1,26 @@
 use scrypto::prelude::*;
 
 #[blueprint]
-#[events(MayaRouterDepositEvent, MayaRouterTransferOutEvent)]
+#[events(
+    MayaRouterDepositEvent,
+    MayaRouterTransferOutEvent,
+    MayaRouterUpdateSignerEvent
+)]
 mod maya_router {
     enable_method_auth! {
         roles {
             // Bifrost Signer is allowed to perform finalized transactions
-            signer => updatable_by: [signer, OWNER];
+            signer => updatable_by: [SELF];
         },
         methods {
             deposit => PUBLIC;
             transfer_out => restrict_to: [signer];
+            update_signer => restrict_to: [signer];
         }
     }
 
     struct MayaRouter {
+        signer: ComponentAddress,
         vaults: IndexMap<ResourceAddress, Vault>,
     }
 
@@ -29,10 +35,12 @@ mod maya_router {
         pub fn instantiate(
             owner_badge: NonFungibleGlobalId,
             signer_rule: AccessRule,
+            signer: Global<AnyComponent>,
         ) -> Global<MayaRouter> {
             let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
 
             Self {
+                signer: signer.address(),
                 vaults: IndexMap::new(),
             }
             .instantiate()
@@ -41,6 +49,17 @@ mod maya_router {
                 signer => signer_rule;
             })
             .globalize()
+        }
+
+        pub fn update_signer(&mut self, signer_rule: AccessRule, signer: Global<AnyComponent>) {
+            Runtime::global_component().set_role("signer", signer_rule);
+
+            // Send update signer event to notify Bifrost Observer
+            Runtime::emit_event(MayaRouterUpdateSignerEvent {
+                previous_signer: self.signer,
+                current_signer: signer.address(),
+            });
+            self.signer = signer.address();
         }
 
         // Deposit some assets
@@ -134,4 +153,10 @@ pub struct MayaRouterTransferOutEvent {
     pub asset: ResourceAddress,   // Resource address of the transferred assets
     pub amount: Decimal,          // Amount of the transferred assets
     pub memo: String,             // Transaction memo
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MayaRouterUpdateSignerEvent {
+    pub previous_signer: ComponentAddress, // Address of the previous signer
+    pub current_signer: ComponentAddress,  // Address of the current signer
 }

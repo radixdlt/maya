@@ -1,4 +1,6 @@
-use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
+use maya_router::{
+    MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterUpdateSignerEvent,
+};
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -43,6 +45,7 @@ impl MayaRouterSimulator {
         ledger: &mut DefaultLedgerSimulator,
         owner_badge: NonFungibleGlobalId,
         signer_rule: AccessRule,
+        signer: ComponentAddress,
     ) -> TransactionReceipt {
         let package_address = ledger.compile_and_publish(this_package!());
         ledger.execute_manifest(
@@ -51,7 +54,7 @@ impl MayaRouterSimulator {
                     package_address,
                     Self::BLUEPRINT_NAME,
                     "instantiate",
-                    manifest_args!(owner_badge, signer_rule),
+                    manifest_args!(owner_badge, signer_rule, signer),
                 )
                 .build(),
             vec![],
@@ -82,7 +85,12 @@ impl MayaRouterSimulator {
             );
         }
 
-        let receipt = Self::create_component(&mut ledger, owner.badge.clone(), signer_rule);
+        let receipt = Self::create_component(
+            &mut ledger,
+            owner.badge.clone(),
+            signer_rule,
+            signer.address,
+        );
         let component_address = receipt.expect_commit_success().new_component_addresses()[0];
         Self {
             ledger,
@@ -140,23 +148,17 @@ impl MayaRouterSimulator {
         self.ledger.execute_manifest(manifest, vec![badge])
     }
 
-    pub fn update_signer(&mut self, new_signer: User) {
+    pub fn update_signer(&mut self, new_signer: &User) -> TransactionReceipt {
         let new_signer_rule = rule!(require(new_signer.badge.clone()));
         let manifest = Self::manifest_builder()
-            .set_role(
+            .call_method(
                 self.component_address,
-                ModuleId::Main,
-                RoleKey::new("signer"),
-                new_signer_rule,
+                "update_signer",
+                manifest_args!(new_signer_rule, new_signer.address),
             )
             .build();
-        let receipt = self
-            .ledger
-            .execute_manifest(manifest, vec![self.signer.badge.clone()]);
-
-        receipt.expect_commit_success();
-
-        self.signer = new_signer;
+        self.ledger
+            .execute_manifest(manifest, vec![self.signer.badge.clone()])
     }
 }
 
@@ -302,7 +304,28 @@ fn maya_router_update_signer_rule() {
 
     // Update signer rule
     let new_signer = User::new(&mut maya_router.ledger);
-    maya_router.update_signer(new_signer);
+    let receipt = maya_router.update_signer(&new_signer);
+    let result = receipt.expect_commit_success();
+    let events = result.application_events.as_slice();
+
+    let event_data = events
+        .iter()
+        .find(|(type_identifier, _)| {
+            type_identifier.eq(&EventTypeIdentifier(
+                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
+                "MayaRouterUpdateSignerEvent".to_string(),
+            ))
+        })
+        .map(|(_, data)| data)
+        .expect("MayaRouterUpdateSignerEvent not found");
+    assert_eq!(
+        scrypto_decode::<MayaRouterUpdateSignerEvent>(&event_data).unwrap(),
+        MayaRouterUpdateSignerEvent {
+            previous_signer: maya_router.signer.address,
+            current_signer: new_signer.address,
+        }
+    );
+    maya_router.signer = new_signer;
 
     // Expect AuthError when using old signer badge
     let receipt = maya_router.transfer_out(
