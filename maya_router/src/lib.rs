@@ -43,8 +43,14 @@ mod maya_router {
             .globalize()
         }
 
-        // Deposit XRD into vault
-        pub fn deposit(&mut self, sender: ComponentAddress, bucket: Bucket, memo: String) {
+        // Deposit some assets
+        //   sender - Address where to return refund if required. Must be the address of the method caller.
+        //   bucket - bucket of assets
+        //   memo   - message to emit when emitting deposit event
+        pub fn deposit(&mut self, sender: Global<AnyComponent>, bucket: Bucket, memo: String) {
+            // Make sure sender is the one that calls this method
+            Runtime::assert_access_rule(sender.get_owner_role().rule);
+
             let amount = bucket.amount();
             let asset = bucket.resource_address();
 
@@ -57,45 +63,50 @@ mod maya_router {
 
             // Send deposit event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterDepositEvent {
-                sender,
+                sender: sender.address(),
                 asset,
                 amount,
                 memo,
             });
         }
 
-        // Send some amount of XRD to given address
-        // Only Bifrost Signer is allowed to call it when finalizing
-        // - swap from some asset to XRD
-        // - remove liquidity request
+        // Send some amount of given asset to given address (only Bifrost Signer is allowed to call it).
+        //   sender  - Address of the account, which currently controls the vault (has "signer" role)
+        //   address - Address where to send assets
+        //   asset   - Resource address of the asset to send
+        //   amount  - amount of asset to send
+        //   memo    - message to emit when emitting sending the assets
         pub fn transfer_out(
             &mut self,
-            sender: ComponentAddress,
+            sender: Global<AnyComponent>,
             address: Global<AnyComponent>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
         ) {
-            if let Some(vault) = self.vaults.get_mut(&asset) {
+            // Make sure sender is the one that calls this method
+            Runtime::assert_access_rule(sender.get_owner_role().rule);
+
+            // Make sure address is a real account, not component.
+            // Malicious component could eg. implement 'try_deposit_or_abort' method
+            // to consume all gas, eg. with busy loop
+            if address.blueprint_id().package_address != ACCOUNT_PACKAGE {
+                Runtime::panic(format!(
+                    "address {:?} is not a real account",
+                    ComponentAddress::try_from(address.handle().as_node_id().as_bytes()).unwrap()
+                ));
+            }
+
+            if let Some(mut vault) = self.vaults.get_mut(&asset) {
                 let bucket = vault.take(amount);
 
-                // Make sure address is a real account, not component.
-                // Malicious component could eg. implement 'try_deposit_or_abort' method
-                // to consume all gas, eg. with busy loop
-                if address.blueprint_id().package_address != ACCOUNT_PACKAGE {
-                    Runtime::panic(format!(
-                        "address {:?} is not a real account",
-                        ComponentAddress::try_from(address.handle().as_node_id().as_bytes())
-                            .unwrap()
-                    ));
-                }
                 let mut account = Account::new(*address.handle());
 
                 account.try_deposit_or_abort(bucket, None);
 
                 // Send transfer out event to notify Bifrost Observer
                 Runtime::emit_event(MayaRouterTransferOutEvent {
-                    sender,
+                    sender: sender.address(),
                     address: address.address(),
                     asset,
                     amount,
