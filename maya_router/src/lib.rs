@@ -1,3 +1,4 @@
+use radix_engine_interface::blueprints::account::ACCOUNT_BLUEPRINT;
 use scrypto::prelude::*;
 
 #[blueprint]
@@ -97,7 +98,7 @@ mod maya_router {
         //   sender   - Address of the account, which currently controls the vault (has "admin" role)
         //   receiver - Address where to send assets (must be a real account)
         //   asset    - Resource address of the asset to send
-        //   amount   - amount of asset to send
+        //   amount   - amount of assets to send
         //   memo     - message to emit when emitting sending the assets
         pub fn transfer_out(
             &mut self,
@@ -113,7 +114,10 @@ mod maya_router {
             // Make sure receiver is a real account, not component.
             // Malicious component could eg. implement 'try_deposit_or_abort' method
             // to consume all gas, eg. with busy loop
-            if receiver.blueprint_id().package_address != ACCOUNT_PACKAGE {
+            if !receiver.blueprint_id().eq(&BlueprintId {
+                package_address: ACCOUNT_PACKAGE,
+                blueprint_name: ACCOUNT_BLUEPRINT.to_string(),
+            }) {
                 Runtime::panic(format!(
                     "address {:?} is not a real account",
                     ComponentAddress::try_from(receiver.handle().as_node_id().as_bytes()).unwrap()
@@ -125,6 +129,7 @@ mod maya_router {
 
                 let mut account = Account::new(*receiver.handle());
 
+                // TODO: Use Account locker in case deposit fails
                 account.try_deposit_or_abort(bucket, None);
 
                 // Send transfer out event to notify Bifrost Observer
@@ -148,7 +153,7 @@ pub struct MayaRouterDepositEvent {
     pub receiver: ComponentAddress, // Address of the account, which currently controls the vault (has "admin" role)
     pub asset: ResourceAddress,     // Resource address of the deposited assets
     pub amount: Decimal,            // Amount of the deposited assets
-    pub memo: String,               // Transaction memo
+    pub memo: String,               // Maya Transaction memo with user intent
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -157,7 +162,7 @@ pub struct MayaRouterTransferOutEvent {
     pub receiver: ComponentAddress, // Address where assets were transferred
     pub asset: ResourceAddress,   // Resource address of the transferred assets
     pub amount: Decimal,          // Amount of the transferred assets
-    pub memo: String,             // Transaction memo
+    pub memo: String,             // Maya Transaction memo with user intent
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
