@@ -41,7 +41,6 @@ impl MayaRouterSimulator {
 
     pub fn create_component(
         ledger: &mut DefaultLedgerSimulator,
-        owner_badge: NonFungibleGlobalId,
         admin_rule: AccessRule,
         admin: ComponentAddress,
     ) -> TransactionReceipt {
@@ -52,7 +51,7 @@ impl MayaRouterSimulator {
                     package_address,
                     Self::BLUEPRINT_NAME,
                     "instantiate",
-                    manifest_args!(owner_badge, admin_rule, admin),
+                    manifest_args!(admin_rule, admin),
                 )
                 .build(),
             vec![],
@@ -83,8 +82,7 @@ impl MayaRouterSimulator {
             );
         }
 
-        let receipt =
-            Self::create_component(&mut ledger, owner.badge.clone(), admin_rule, admin.address);
+        let receipt = Self::create_component(&mut ledger, admin_rule, admin.address);
         let component_address = receipt.expect_commit_success().new_component_addresses()[0];
         Self {
             ledger,

@@ -34,11 +34,10 @@ mod maya_router {
     //   (old one could be compromised or lacks some features)
     impl MayaRouter {
         pub fn instantiate(
-            owner_badge: NonFungibleGlobalId,
             admin_rule: AccessRule,
             admin: Global<AnyComponent>,
         ) -> Global<MayaRouter> {
-            let owner_role = OwnerRole::Fixed(rule!(require(owner_badge)));
+            let owner_role = OwnerRole::None;
 
             Self {
                 admin: admin.address(),
