@@ -22,7 +22,7 @@ mod maya_router {
 
     struct MayaRouter {
         admin: ComponentAddress,
-        vaults: KeyValueStore<ResourceAddress, Vault>,
+        vaults: KeyValueStore<Ed25519PublicKey, KeyValueStore<ResourceAddress, Vault>>,
     }
 
     // TODO:
@@ -66,33 +66,54 @@ mod maya_router {
         }
 
         // Deposit some assets
-        //   sender - Address where to return refund if required. Must be the address of the method caller.
-        //   bucket - bucket of assets
-        //   memo   - message to emit when emitting deposit event
-        pub fn deposit(&mut self, sender: Global<AnyComponent>, bucket: Bucket, memo: String) {
+        //   sender       - Address where to return refund if required. Must be the address of the method caller
+        //   asgard_vault - Public key of the Asgard Vault, which shall control deposited resources
+        //   bucket       - bucket of assets
+        //   memo         - message to emit when emitting deposit event
+        pub fn deposit(
+            &mut self,
+            sender: Global<AnyComponent>,
+            asgard_vault: Ed25519PublicKey,
+            bucket: Bucket,
+            memo: String,
+        ) {
             // Make sure sender is the one that calls this method
             Runtime::assert_access_rule(sender.get_owner_role().rule);
 
             let amount = bucket.amount();
             let asset = bucket.resource_address();
 
-            let exists = if let Some(_) = self.vaults.get(&asset) {
+            let asgard_vault_exists = if let Some(_) = self.vaults.get(&asgard_vault) {
                 true
             } else {
                 false
             };
 
-            if exists {
-                let mut vault = self.vaults.get_mut(&asset).unwrap();
-                vault.put(bucket);
+            if asgard_vault_exists {
+                let mut asset_vault_kv_store = self.vaults.get_mut(&asgard_vault).unwrap();
+                let asset_exists = if let Some(_) = asset_vault_kv_store.get(&asset) {
+                    true
+                } else {
+                    false
+                };
+
+                if asset_exists {
+                    let mut vault = asset_vault_kv_store.get_mut(&asset).unwrap();
+                    vault.put(bucket);
+                } else {
+                    asset_vault_kv_store.insert(asset, Vault::with_bucket(bucket));
+                }
             } else {
-                self.vaults.insert(asset, Vault::with_bucket(bucket));
-            }
+                let asset_vault_kv_store = KeyValueStore::new();
+                asset_vault_kv_store.insert(asset, Vault::with_bucket(bucket));
+
+                self.vaults.insert(asgard_vault, asset_vault_kv_store);
+            };
 
             // Send deposit event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterDepositEvent {
                 sender: sender.address(),
-                receiver: self.admin,
+                asgard_vault,
                 asset,
                 amount,
                 memo,
@@ -100,21 +121,23 @@ mod maya_router {
         }
 
         // Send some amount of given asset to given address (only Bifrost Signer is allowed to call it).
-        //   sender   - Address of the account, which currently controls the vault (has "admin" role)
-        //   receiver - Address where to send assets (must be a real account)
-        //   asset    - Resource address of the asset to send
-        //   amount   - amount of assets to send
-        //   memo     - message to emit when emitting sending the assets
+        //   asgard_vault - Public key of the Asgard Vault, which controls transferred assets
+        //   receiver     - Address where to send assets (must be a real account)
+        //   asset        - Resource address of the asset to send
+        //   amount       - amount of assets to send
+        //   memo         - message to emit when emitting sending the assets
         pub fn transfer_out(
             &mut self,
-            sender: Global<AnyComponent>,
+            asgard_vault: Ed25519PublicKey,
             receiver: Global<AnyComponent>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
         ) {
             // Make sure sender is the one that calls this method
-            Runtime::assert_access_rule(sender.get_owner_role().rule);
+            Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
+                &asgard_vault
+            ))));
 
             // Make sure receiver is a real account, not component.
             // Malicious component could eg. implement 'try_deposit_or_abort' method
@@ -129,24 +152,31 @@ mod maya_router {
                 ));
             }
 
-            if let Some(mut vault) = self.vaults.get_mut(&asset) {
-                let bucket = vault.take(amount);
+            if let Some(mut asset_vault_kv_store) = self.vaults.get_mut(&asgard_vault) {
+                if let Some(mut vault) = asset_vault_kv_store.get_mut(&asset) {
+                    let bucket = vault.take(amount);
 
-                let mut account = Account::new(*receiver.handle());
+                    let mut account = Account::new(*receiver.handle());
 
-                // TODO: Use Account locker in case deposit fails
-                account.try_deposit_or_abort(bucket, None);
+                    // TODO: Use Account locker in case deposit fails
+                    account.try_deposit_or_abort(bucket, None);
 
-                // Send transfer out event to notify Bifrost Observer
-                Runtime::emit_event(MayaRouterTransferOutEvent {
-                    sender: sender.address(),
-                    receiver: receiver.address(),
-                    asset,
-                    amount,
-                    memo,
-                });
+                    // Send transfer out event to notify Bifrost Observer
+                    Runtime::emit_event(MayaRouterTransferOutEvent {
+                        asgard_vault,
+                        receiver: receiver.address(),
+                        asset,
+                        amount,
+                        memo,
+                    });
+                } else {
+                    Runtime::panic(format!(
+                        "asset {:?} not available in the asgard vault {:?}",
+                        asset, asgard_vault
+                    ));
+                }
             } else {
-                Runtime::panic(format!("asset {:?} not available in the vault", asset));
+                Runtime::panic(format!("asgard vault {:?} not available", asgard_vault));
             }
         }
     }
@@ -154,20 +184,20 @@ mod maya_router {
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterDepositEvent {
-    pub sender: ComponentAddress,   // Address of the deposit sender
-    pub receiver: ComponentAddress, // Address of the account, which currently controls the vault (has "admin" role)
-    pub asset: ResourceAddress,     // Resource address of the deposited assets
-    pub amount: Decimal,            // Amount of the deposited assets
-    pub memo: String,               // Maya Transaction memo with user intent
+    pub sender: ComponentAddress,       // Address of the deposit sender
+    pub asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which controls deposited assets
+    pub asset: ResourceAddress,         // Resource address of the deposited assets
+    pub amount: Decimal,                // Amount of the deposited assets
+    pub memo: String,                   // Maya Transaction memo with user intent
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MayaRouterTransferOutEvent {
-    pub sender: ComponentAddress, // Address of the account, which currently controls the vault (has "admin" role)
-    pub receiver: ComponentAddress, // Address where assets were transferred
-    pub asset: ResourceAddress,   // Resource address of the transferred assets
-    pub amount: Decimal,          // Amount of the transferred assets
-    pub memo: String,             // Maya Transaction memo with user intent
+    pub asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which sends assets
+    pub receiver: ComponentAddress,     // Address where assets were transferred
+    pub asset: ResourceAddress,         // Resource address of the transferred assets
+    pub amount: Decimal,                // Amount of the transferred assets
+    pub memo: String,                   // Maya Transaction memo with user intent
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
