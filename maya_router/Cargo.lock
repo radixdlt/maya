@@ -589,7 +589,7 @@ dependencies = [
 name = "maya_router"
 version = "1.0.0"
 dependencies = [
- "radix-engine-interface",
+ "radix-engine",
  "sbor",
  "scrypto",
  "scrypto-test",

@@ -1,4 +1,3 @@
-use radix_engine_interface::blueprints::account::ACCOUNT_BLUEPRINT;
 use scrypto::prelude::*;
 
 #[blueprint]
@@ -35,7 +34,7 @@ mod maya_router {
         //   memo         - message to emit when emitting deposit event
         pub fn deposit(
             &mut self,
-            sender: Global<AnyComponent>,
+            sender: Global<Account>,
             asgard_vault: Ed25519PublicKey,
             bucket: Bucket,
             memo: String,
@@ -92,7 +91,7 @@ mod maya_router {
         pub fn transfer_out(
             &mut self,
             asgard_vault: Ed25519PublicKey,
-            receiver: Global<AnyComponent>,
+            receiver: Global<Account>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
@@ -101,19 +100,6 @@ mod maya_router {
             Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
                 &asgard_vault
             ))));
-
-            // Make sure receiver is a real account, not component.
-            // Malicious component could eg. implement 'try_deposit_or_abort' method
-            // to consume all gas, eg. with busy loop
-            if !receiver.blueprint_id().eq(&BlueprintId {
-                package_address: ACCOUNT_PACKAGE,
-                blueprint_name: ACCOUNT_BLUEPRINT.to_string(),
-            }) {
-                Runtime::panic(format!(
-                    "address {:?} is not a real account",
-                    ComponentAddress::try_from(receiver.handle().as_node_id().as_bytes()).unwrap()
-                ));
-            }
 
             if let Some(mut asset_vault_kv_store) = self.vaults.get_mut(&asgard_vault) {
                 if let Some(mut vault) = asset_vault_kv_store.get_mut(&asset) {

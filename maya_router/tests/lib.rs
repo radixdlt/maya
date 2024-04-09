@@ -1,4 +1,5 @@
 use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
+use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
@@ -140,7 +141,7 @@ impl MayaRouterSimulator {
 }
 
 #[test]
-fn maya_router_swap_and_send_success() {
+fn maya_router_deposit_and_transfer_out_success() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -228,7 +229,47 @@ fn maya_router_swap_and_send_success() {
 }
 
 #[test]
-fn maya_router_swap_and_send_asset_not_available() {
+fn maya_router_deposit_sender_non_real_account() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+
+    // Act
+    let swap_memo = "SWAP:MAYA.CACAO";
+
+    // Act
+    let manifest = MayaRouterSimulator::manifest_builder()
+        .withdraw_from_account(maya_router.swapper.address, XRD, dec!(100))
+        .take_all_from_worktop(XRD, "bucket")
+        .with_bucket("bucket", |builder, bucket| {
+            builder.call_method(
+                maya_router.component_address,
+                "deposit",
+                manifest_args!(
+                    maya_router.component_address, // non-account component address
+                    maya_router.asgard_vault_1.public_key,
+                    bucket,
+                    swap_memo.to_string()
+                ),
+            )
+        })
+        .build();
+    let receipt = maya_router
+        .ledger
+        .execute_manifest(manifest, vec![maya_router.swapper.badge]);
+
+    // Assert
+    receipt.expect_specific_failure(|e| {
+        matches!(
+            e,
+            RuntimeError::SystemError(SystemError::TypeCheckError(
+                TypeCheckError::BlueprintPayloadValidationError(..)
+            ))
+        )
+    });
+}
+
+#[test]
+fn maya_router_transfer_out_asset_not_available() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -271,7 +312,7 @@ fn maya_router_swap_and_send_asset_not_available() {
 }
 
 #[test]
-fn maya_router_swap_and_send_asgard_vault_not_available() {
+fn maya_router_transfer_out_asgard_vault_not_available() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -299,7 +340,7 @@ fn maya_router_swap_and_send_asgard_vault_not_available() {
 }
 
 #[test]
-fn maya_router_swap_and_send_assert_access_rule_failed() {
+fn maya_router_transfer_out_assert_access_rule_failed() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
