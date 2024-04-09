@@ -2,67 +2,30 @@ use radix_engine_interface::blueprints::account::ACCOUNT_BLUEPRINT;
 use scrypto::prelude::*;
 
 #[blueprint]
-#[events(
-    MayaRouterDepositEvent,
-    MayaRouterTransferOutEvent,
-    MayaRouterUpdateAdminEvent
-)]
+#[events(MayaRouterDepositEvent, MayaRouterTransferOutEvent)]
 mod maya_router {
     enable_method_auth! {
-        roles {
-            // Bifrost Signer is allowed to perform finalized transactions
-            admin => updatable_by: [SELF];
-        },
         methods {
             deposit => PUBLIC;
-            transfer_out => restrict_to: [admin];
-            update_admin => restrict_to: [admin];
+            transfer_out => PUBLIC;
         }
     }
 
+    // MayaRouter owns vaults with resources per Asgard Vault public key.
     struct MayaRouter {
-        admin: ComponentAddress,
         vaults: KeyValueStore<Ed25519PublicKey, KeyValueStore<ResourceAddress, Vault>>,
     }
 
-    // TODO:
-    // - consider a potential need to support old and new badge for "admin" role
-    //   for a given period of time
-    //   eg. old vault which is being retired still accepts
-    //       deposits, and those deposits shall be possible to transfer out.
-    // - consider adding a method that transfers all resources to another MayaRouter
-    //   (old one could be compromised or lacks some features)
     impl MayaRouter {
-        pub fn instantiate(
-            admin_rule: AccessRule,
-            admin: Global<AnyComponent>,
-        ) -> Global<MayaRouter> {
+        pub fn instantiate() -> Global<MayaRouter> {
             let owner_role = OwnerRole::None;
 
             Self {
-                admin: admin.address(),
                 vaults: KeyValueStore::new(),
             }
             .instantiate()
             .prepare_to_globalize(owner_role)
-            .roles(roles! {
-                admin => admin_rule;
-            })
             .globalize()
-        }
-
-        // Update "admin" role
-        //   admin_rule - new access rule
-        //   admin      - new admin account address
-        pub fn update_admin(&mut self, admin_rule: AccessRule, admin: Global<AnyComponent>) {
-            Runtime::global_component().set_role("admin", admin_rule);
-
-            // Send update admin event to notify Bifrost Observer
-            Runtime::emit_event(MayaRouterUpdateAdminEvent {
-                previous_admin: self.admin,
-                current_admin: admin.address(),
-            });
-            self.admin = admin.address();
         }
 
         // Deposit some assets
@@ -120,7 +83,7 @@ mod maya_router {
             });
         }
 
-        // Send some amount of given asset to given address (only Bifrost Signer is allowed to call it).
+        // Send some amount of given asset to given address.
         //   asgard_vault - Public key of the Asgard Vault, which controls transferred assets
         //   receiver     - Address where to send assets (must be a real account)
         //   asset        - Resource address of the asset to send
@@ -134,7 +97,7 @@ mod maya_router {
             amount: Decimal,
             memo: String,
         ) {
-            // Make sure sender is the one that calls this method
+            // Make sure asgard vault is the one that calls this method
             Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
                 &asgard_vault
             ))));
@@ -198,10 +161,4 @@ pub struct MayaRouterTransferOutEvent {
     pub asset: ResourceAddress,         // Resource address of the transferred assets
     pub amount: Decimal,                // Amount of the transferred assets
     pub memo: String,                   // Maya Transaction memo with user intent
-}
-
-#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MayaRouterUpdateAdminEvent {
-    pub previous_admin: ComponentAddress, // Address of the previous admin account
-    pub current_admin: ComponentAddress,  // Address of the current admin account
 }
