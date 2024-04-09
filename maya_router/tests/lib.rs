@@ -1,21 +1,21 @@
-use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterUpdateAdminEvent};
+use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 
 struct User {
-    _public_key: Secp256k1PublicKey,
-    _private_key: Secp256k1PrivateKey,
+    public_key: Ed25519PublicKey,
+    _private_key: Ed25519PrivateKey,
     address: ComponentAddress,
     badge: NonFungibleGlobalId,
 }
 
 impl User {
     fn new(ledger: &mut DefaultLedgerSimulator) -> Self {
-        let (public_key, private_key, address) = ledger.new_account(false);
+        let (public_key, private_key, address) = ledger.new_ed25519_virtual_account();
         let badge = NonFungibleGlobalId::from_public_key(&public_key);
 
         User {
-            _public_key: public_key,
+            public_key,
             _private_key: private_key,
             address,
             badge,
@@ -27,7 +27,8 @@ struct MayaRouterSimulator {
     pub ledger: DefaultLedgerSimulator,
     pub component_address: ComponentAddress,
     pub _owner: User,
-    pub admin: User,
+    pub asgard_vault_1: User,
+    pub asgard_vault_2: User,
     pub swapper: User,
     pub resources: IndexMap<String, ResourceAddress>,
 }
@@ -39,11 +40,7 @@ impl MayaRouterSimulator {
         ManifestBuilder::new().lock_fee_from_faucet()
     }
 
-    pub fn create_component(
-        ledger: &mut DefaultLedgerSimulator,
-        admin_rule: AccessRule,
-        admin: ComponentAddress,
-    ) -> TransactionReceipt {
+    pub fn create_component(ledger: &mut DefaultLedgerSimulator) -> TransactionReceipt {
         let package_address = ledger.compile_and_publish(this_package!());
         ledger.execute_manifest(
             Self::manifest_builder()
@@ -51,7 +48,7 @@ impl MayaRouterSimulator {
                     package_address,
                     Self::BLUEPRINT_NAME,
                     "instantiate",
-                    manifest_args!(admin_rule, admin),
+                    manifest_args!(),
                 )
                 .build(),
             vec![],
@@ -62,10 +59,9 @@ impl MayaRouterSimulator {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
         let owner = User::new(&mut ledger);
-        let admin = User::new(&mut ledger);
+        let asgard_vault_1 = User::new(&mut ledger);
+        let asgard_vault_2 = User::new(&mut ledger);
         let swapper = User::new(&mut ledger);
-
-        let admin_rule = rule!(require(admin.badge.clone()));
 
         let mut resources = indexmap!();
         resources.insert("XRD".to_string(), XRD);
@@ -82,13 +78,14 @@ impl MayaRouterSimulator {
             );
         }
 
-        let receipt = Self::create_component(&mut ledger, admin_rule, admin.address);
+        let receipt = Self::create_component(&mut ledger);
         let component_address = receipt.expect_commit_success().new_component_addresses()[0];
         Self {
             ledger,
             component_address,
             _owner: owner,
-            admin,
+            asgard_vault_1,
+            asgard_vault_2,
             swapper,
             resources,
         }
@@ -101,56 +98,44 @@ impl MayaRouterSimulator {
 
     pub fn deposit(
         &mut self,
+        asgard_vault: Ed25519PublicKey,
+        from: ComponentAddress,
+        badge: NonFungibleGlobalId,
         asset: ResourceAddress,
         amount: Decimal,
-        memo: String,
+        memo: &str,
     ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
-            .withdraw_from_account(self.swapper.address, asset, amount)
+            .withdraw_from_account(from, asset, amount)
             .take_all_from_worktop(asset, "bucket")
             .with_bucket("bucket", |builder, bucket| {
                 builder.call_method(
                     self.component_address,
                     "deposit",
-                    manifest_args!(self.swapper.address, bucket, memo),
+                    manifest_args!(from, asgard_vault, bucket, memo.to_string()),
                 )
             })
             .build();
-        self.ledger
-            .execute_manifest(manifest, vec![self.swapper.badge.clone()])
+        self.ledger.execute_manifest(manifest, vec![badge])
     }
 
-    // Only admin can call it
     pub fn transfer_out(
         &mut self,
-        sender: ComponentAddress,
+        asgard_vault: Ed25519PublicKey,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
         asset: ResourceAddress,
         amount: Decimal,
-        memo: String,
+        memo: &str,
     ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
                 "transfer_out",
-                manifest_args!(sender, to, asset, amount, memo),
+                manifest_args!(asgard_vault, to, asset, amount, memo.to_string()),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
-    }
-
-    pub fn update_admin(&mut self, new_admin: &User) -> TransactionReceipt {
-        let new_admin_rule = rule!(require(new_admin.badge.clone()));
-        let manifest = Self::manifest_builder()
-            .call_method(
-                self.component_address,
-                "update_admin",
-                manifest_args!(new_admin_rule, new_admin.address),
-            )
-            .build();
-        self.ledger
-            .execute_manifest(manifest, vec![self.admin.badge.clone()])
     }
 }
 
@@ -160,12 +145,19 @@ fn maya_router_swap_and_send_success() {
     let mut maya_router = MayaRouterSimulator::new();
 
     // Act
-    let swap_memo = "SWAP:MAYA.CACAO".to_string();
-    let tx_out_memo = "OUT:".to_string();
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
 
     // Perform Swap
     // Act
-    let receipt = maya_router.deposit(XRD, dec!(100), swap_memo.clone());
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(100),
+        swap_memo,
+    );
 
     // Assert
     let result = receipt.expect_commit_success();
@@ -186,10 +178,10 @@ fn maya_router_swap_and_send_success() {
         scrypto_decode::<MayaRouterDepositEvent>(&event_data).unwrap(),
         MayaRouterDepositEvent {
             sender: maya_router.swapper.address,
-            receiver: maya_router.admin.address,
+            asgard_vault: maya_router.asgard_vault_1.public_key,
             asset: XRD,
             amount: dec!(100),
-            memo: swap_memo,
+            memo: swap_memo.to_string(),
         }
     );
 
@@ -199,12 +191,12 @@ fn maya_router_swap_and_send_success() {
 
     // Act
     let receipt = maya_router.transfer_out(
-        maya_router.admin.address,
-        maya_router.admin.badge.clone(),
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
-        tx_out_memo.clone(),
+        tx_out_memo,
     );
 
     // Assert
@@ -225,28 +217,35 @@ fn maya_router_swap_and_send_success() {
     assert_eq!(
         scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
         MayaRouterTransferOutEvent {
-            sender: maya_router.admin.address,
+            asgard_vault: maya_router.asgard_vault_1.public_key,
             receiver: maya_router.swapper.address,
             asset: XRD,
             amount: dec!(100),
-            memo: tx_out_memo,
+            memo: tx_out_memo.to_string(),
         }
     );
     assert_eq!(balance + dec!(100), maya_router.get_swapper_balance(XRD));
 }
 
 #[test]
-fn maya_router_swap_and_send_fail() {
+fn maya_router_swap_and_send_asset_not_available() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
     // Act
-    let swap_memo = "SWAP:MAYA.CACAO".to_string();
-    let tx_out_memo = "OUT:".to_string();
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
 
     // Perform Swap
     // Act
-    let receipt = maya_router.deposit(XRD, dec!(100), swap_memo.clone());
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(100),
+        swap_memo,
+    );
 
     // Assert
     receipt.expect_commit_success();
@@ -254,94 +253,203 @@ fn maya_router_swap_and_send_fail() {
     // Perform Send of non-existing asset
     // Act
     let receipt = maya_router.transfer_out(
-        maya_router.admin.address,
-        maya_router.admin.badge.clone(),
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
         maya_router.swapper.address,
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
-        tx_out_memo.clone(),
+        tx_out_memo,
     );
 
     // Assert
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("not available in the vault")
+            s.contains("not available in the asgard vault")
         }
         _ => false,
     });
 }
 
 #[test]
-fn maya_router_update_admin_rule() {
+fn maya_router_swap_and_send_asgard_vault_not_available() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
-    let swap_memo = "SWAP:MAYA.CACAO".to_string();
-    let tx_out_memo = "OUT:".to_string();
-
-    let old_admin_badge = maya_router.admin.badge.clone();
 
     // Act
-    let receipt = maya_router.deposit(XRD, dec!(1000), swap_memo);
-    receipt.expect_commit_success();
+    let tx_out_memo = "OUT:";
 
-    // No error expected when using old admin badge
+    // Perform Send from non-existing Asgard Vault
+    // Act
     let receipt = maya_router.transfer_out(
-        maya_router.admin.address,
-        old_admin_badge.clone(),
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
         maya_router.swapper.address,
-        XRD,
+        *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
-        tx_out_memo.clone(),
+        tx_out_memo,
     );
-    receipt.expect_commit_success();
 
-    // Update admin rule
-    let new_admin = User::new(&mut maya_router.ledger);
-    let receipt = maya_router.update_admin(&new_admin);
-    let result = receipt.expect_commit_success();
-    let events = result.application_events.as_slice();
-
-    let event_data = events
-        .iter()
-        .find(|(type_identifier, _)| {
-            type_identifier.eq(&EventTypeIdentifier(
-                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
-                "MayaRouterUpdateAdminEvent".to_string(),
-            ))
-        })
-        .map(|(_, data)| data)
-        .expect("MayaRouterUpdateAdminEvent not found");
-    assert_eq!(
-        scrypto_decode::<MayaRouterUpdateAdminEvent>(&event_data).unwrap(),
-        MayaRouterUpdateAdminEvent {
-            previous_admin: maya_router.admin.address,
-            current_admin: new_admin.address,
+    // Assert
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("asgard vault") && s.contains("not available")
         }
-    );
-    maya_router.admin = new_admin;
+        _ => false,
+    });
+}
 
-    // Expect AuthError when using old admin badge
-    let receipt = maya_router.transfer_out(
-        maya_router.admin.address,
-        old_admin_badge.clone(),
+#[test]
+fn maya_router_swap_and_send_assert_access_rule_failed() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+
+    // Act
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
+
+    // Perform Swap
+    // Act
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
         maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
         XRD,
         dec!(100),
-        tx_out_memo.clone(),
+        swap_memo,
+    );
+
+    // Assert
+    receipt.expect_commit_success();
+
+    // Act
+    // Expect AssertAccessRuleFailed when using Asgard Vault 2 badge for Asgard Vault 1
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_2.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
     );
     receipt.expect_specific_failure(|e| {
         matches!(
             e,
-            RuntimeError::SystemModuleError(SystemModuleError::AuthError(AuthError::Unauthorized(
-                ..
-            )))
+            RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
         )
     });
+}
 
-    // No error expected when using current admin badge
+#[test]
+fn maya_router_multiple_asgard_vaults() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
+
+    // Act
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(1000),
+        swap_memo,
+    );
+    receipt.expect_commit_success();
+
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(1000),
+        swap_memo,
+    );
+    receipt.expect_commit_success();
+
+    // No error expected when transferring XRD from Asgard Vault 1 with Asgard Vault 1 badge
     let receipt = maya_router.transfer_out(
-        maya_router.admin.address,
-        maya_router.admin.badge.clone(),
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.swapper.address,
+        XRD,
+        dec!(100),
+        tx_out_memo,
+    );
+    receipt.expect_commit_success();
+
+    // No error expected when transferring USDT from Asgard Vault 2 with Asgard Vault 2 badge
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.asgard_vault_2.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
+    );
+    receipt.expect_commit_success();
+
+    // Expect resources not available when trying to transfer XRD from Asgard Vault 2
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.asgard_vault_2.badge.clone(),
+        maya_router.swapper.address,
+        XRD,
+        dec!(100),
+        tx_out_memo,
+    );
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("not available in the asgard vault")
+        }
+        _ => false,
+    });
+}
+
+#[test]
+fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
+
+    // Act
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(1000),
+        swap_memo,
+    );
+    receipt.expect_commit_success();
+
+    // Transfer resources to Asgard Vault 2 address
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.asgard_vault_2.address,
+        XRD,
+        dec!(100),
+        tx_out_memo,
+    );
+    receipt.expect_commit_success();
+
+    // Deposit resources from Asgard Vault 2 address into Asgard Vault 2
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.asgard_vault_2.address,
+        maya_router.asgard_vault_2.badge.clone(),
+        XRD,
+        dec!(100),
+        tx_out_memo,
+    );
+    receipt.expect_commit_success();
+
+    // No error expected when transferring XRD from Asgard Vault 2
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.asgard_vault_2.badge.clone(),
         maya_router.swapper.address,
         XRD,
         dec!(100),
