@@ -1,4 +1,6 @@
-use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
+use maya_router::{
+    MayaRouterDepositEvent, MayaRouterTransferAsgardVaultEvent, MayaRouterTransferOutEvent,
+};
 use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
@@ -134,6 +136,24 @@ impl MayaRouterSimulator {
                 self.component_address,
                 "transfer_out",
                 manifest_args!(asgard_vault, to, asset, amount, memo.to_string()),
+            )
+            .build();
+        self.ledger.execute_manifest(manifest, vec![badge])
+    }
+
+    pub fn transfer_out_asgard_vault(
+        &mut self,
+        from_asgard_vault: Ed25519PublicKey,
+        badge: NonFungibleGlobalId,
+        to_asgard_vault: Ed25519PublicKey,
+        asset: ResourceAddress,
+        memo: &str,
+    ) -> TransactionReceipt {
+        let manifest = Self::manifest_builder()
+            .call_method(
+                self.component_address,
+                "transfer_out_to_asgard_vault",
+                manifest_args!(from_asgard_vault, to_asgard_vault, asset, memo.to_string()),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
@@ -452,7 +472,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
     let swap_memo = "SWAP:MAYA.CACAO";
-    let tx_out_memo = "OUT:";
+    let tx_out_memo = "OUT: AsgardVault transfer";
 
     // Act
     let receipt = maya_router.deposit(
@@ -465,29 +485,60 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
     );
     receipt.expect_commit_success();
 
-    // Transfer resources to Asgard Vault 2 address
+    // Transfer XRD from Asgard Vault 1 to Asgard Vault 2
+    let receipt = maya_router.transfer_out_asgard_vault(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.asgard_vault_2.public_key,
+        XRD,
+        tx_out_memo,
+    );
+
+    // Assert
+    let result = receipt.expect_commit_success();
+    let events = result.application_events.as_slice();
+
+    let event_data = events
+        .iter()
+        .find(|(type_identifier, _)| {
+            type_identifier.eq(&EventTypeIdentifier(
+                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
+                "MayaRouterTransferAsgardVaultEvent".to_string(),
+            ))
+        })
+        .map(|(_, data)| data)
+        .expect("MayaRouterTransferAsgardVaultEvent not found");
+
+    assert_eq!(
+        scrypto_decode::<MayaRouterTransferAsgardVaultEvent>(&event_data).unwrap(),
+        MayaRouterTransferAsgardVaultEvent {
+            from_asgard_vault: maya_router.asgard_vault_1.public_key,
+            to_asgard_vault: maya_router.asgard_vault_2.public_key,
+            asset: XRD,
+            amount: dec!(1000),
+            memo: tx_out_memo.to_string(),
+        }
+    );
+
+    // Try Transfer out XRD from Asgard Vault 1
     let receipt = maya_router.transfer_out(
         maya_router.asgard_vault_1.public_key,
         maya_router.asgard_vault_1.badge.clone(),
-        maya_router.asgard_vault_2.address,
-        XRD,
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
     );
-    receipt.expect_commit_success();
 
-    // Deposit resources from Asgard Vault 2 address into Asgard Vault 2
-    let receipt = maya_router.deposit(
-        maya_router.asgard_vault_2.public_key,
-        maya_router.asgard_vault_2.address,
-        maya_router.asgard_vault_2.badge.clone(),
-        XRD,
-        dec!(100),
-        tx_out_memo,
-    );
-    receipt.expect_commit_success();
+    // Assert
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("Asgard Vault") && s.contains("not available")
+        }
+        _ => false,
+    });
 
-    // No error expected when transferring XRD from Asgard Vault 2
+    // Transfer out XRD from Asgard Vault 2
     let receipt = maya_router.transfer_out(
         maya_router.asgard_vault_2.public_key,
         maya_router.asgard_vault_2.badge.clone(),
