@@ -11,7 +11,7 @@ mod maya_router {
         methods {
             deposit => PUBLIC;
             transfer_out => PUBLIC;
-            transfer_out_to_asgard_vault => PUBLIC;
+            transfer_between_asgard_vaults => PUBLIC;
         }
     }
 
@@ -146,7 +146,7 @@ mod maya_router {
             });
         }
 
-        pub fn transfer_out_to_asgard_vault(
+        pub fn transfer_between_asgard_vaults(
             &mut self,
             from_asgard_vault: Ed25519PublicKey,
             to_asgard_vault: Ed25519PublicKey,

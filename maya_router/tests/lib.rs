@@ -152,7 +152,7 @@ impl MayaRouterSimulator {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
-                "transfer_out_to_asgard_vault",
+                "transfer_between_asgard_vaults",
                 manifest_args!(from_asgard_vault, to_asgard_vault, asset, memo.to_string()),
             )
             .build();
