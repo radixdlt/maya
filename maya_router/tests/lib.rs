@@ -289,6 +289,49 @@ fn maya_router_deposit_sender_non_real_account() {
 }
 
 #[test]
+fn maya_router_transfer_out_too_big_amount() {
+    // Arrange
+    let mut maya_router = MayaRouterSimulator::new();
+
+    // Act
+    let swap_memo = "SWAP:MAYA.CACAO";
+    let tx_out_memo = "OUT:";
+
+    // Perform Swap
+    // Act
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(100),
+        swap_memo,
+    );
+
+    // Assert
+    receipt.expect_commit_success();
+
+    // Perform Send of non-existing asset
+    // Act
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.swapper.address,
+        XRD,
+        dec!(101),
+        tx_out_memo,
+    );
+
+    // Assert
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("balance") && s.contains("lower than taken amount")
+        }
+        _ => false,
+    });
+}
+
+#[test]
 fn maya_router_transfer_out_asset_not_available() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
