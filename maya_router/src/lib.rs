@@ -32,6 +32,8 @@ mod maya_router {
             .globalize()
         }
 
+        // Take some amount of assets from the given Asgard Vault.
+        // If amount is None, then taka all.
         fn asgard_vault_take(
             &mut self,
             asgard_vault: Ed25519PublicKey,
@@ -65,6 +67,8 @@ mod maya_router {
             }
         }
 
+        // Put bucket of assets into the Asgard Vault.
+        // If vault of assets does not exist, then create it.
         fn asgard_vault_put(&mut self, asgard_vault: Ed25519PublicKey, bucket: Bucket) {
             let asset = bucket.resource_address();
 
@@ -92,7 +96,8 @@ mod maya_router {
             bucket: Bucket,
             memo: String,
         ) {
-            // Make sure sender is the one that calls this method
+            // Make sure the sender account's owner's proof is present when calling this method.
+            // This will be present if the sender has just withdrawn from their account.
             Runtime::assert_access_rule(sender.get_owner_role().rule);
 
             let amount = bucket.amount();
@@ -119,22 +124,20 @@ mod maya_router {
         pub fn transfer_out(
             &mut self,
             asgard_vault: Ed25519PublicKey,
-            receiver: Global<Account>,
+            mut receiver: Global<Account>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
         ) {
-            // Make sure asgard vault is the one that calls this method
+            // Make sure the asgard vault account's owner's proof is present when calling this method.
             Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
                 &asgard_vault
             ))));
 
             let bucket = self.asgard_vault_take(asgard_vault, asset, Some(amount));
 
-            let mut account = Account::new(*receiver.handle());
-
             // TODO: Use Account locker in case deposit fails
-            account.try_deposit_or_abort(bucket, None);
+            receiver.try_deposit_or_abort(bucket, None);
 
             // Send transfer out event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterTransferOutEvent {
@@ -153,7 +156,7 @@ mod maya_router {
             asset: ResourceAddress,
             memo: String,
         ) {
-            // Make sure asgard vault is the one that calls this method
+            // Make sure the asgard vault account's owner's proof is present when calling this method.
             Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
                 &from_asgard_vault
             ))));
