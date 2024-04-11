@@ -15,9 +15,9 @@ mod maya_router {
         }
     }
 
-    // MayaRouter owns vaults with resources per Asgard Vault public key.
+    // MayaRouter owns vaults with fungible resources per Asgard Vault public key.
     struct MayaRouter {
-        vaults: KeyValueStore<(Ed25519PublicKey, ResourceAddress), Vault>,
+        vaults: KeyValueStore<(Ed25519PublicKey, ResourceAddress), FungibleVault>,
     }
 
     impl MayaRouter {
@@ -39,7 +39,7 @@ mod maya_router {
             asgard_vault: Ed25519PublicKey,
             asset: ResourceAddress,
             amount: Option<Decimal>,
-        ) -> Bucket {
+        ) -> FungibleBucket {
             let mut vault = match self.vaults.get_mut(&(asgard_vault, asset)) {
                 Some(vault) => vault,
                 None => Runtime::panic(format!(
@@ -49,7 +49,7 @@ mod maya_router {
             };
 
             // Would be nice to remove empty vault from the store, but currently
-            // is not possible to remove objects persisted in substore store.
+            // it is not possible to remove objects persisted in substore store.
             match amount {
                 None => vault.take_all(),
                 Some(amount) => {
@@ -69,7 +69,7 @@ mod maya_router {
 
         // Put bucket of assets into the Asgard Vault.
         // If vault of assets does not exist, then create it.
-        fn asgard_vault_put(&mut self, asgard_vault: Ed25519PublicKey, bucket: Bucket) {
+        fn asgard_vault_put(&mut self, asgard_vault: Ed25519PublicKey, bucket: FungibleBucket) {
             let asset = bucket.resource_address();
 
             if self.vaults.get(&(asgard_vault, asset)).is_some() {
@@ -80,7 +80,7 @@ mod maya_router {
                 vault.put(bucket);
             } else {
                 self.vaults
-                    .insert((asgard_vault, asset), Vault::with_bucket(bucket));
+                    .insert((asgard_vault, asset), FungibleVault::with_bucket(bucket));
             }
         }
 
@@ -93,7 +93,7 @@ mod maya_router {
             &mut self,
             sender: Global<Account>,
             asgard_vault: Ed25519PublicKey,
-            bucket: Bucket,
+            bucket: FungibleBucket,
             memo: String,
         ) {
             // Make sure the sender account's owner's proof is present when calling this method.
@@ -137,7 +137,7 @@ mod maya_router {
             let bucket = self.asgard_vault_take(asgard_vault, asset, Some(amount));
 
             // TODO: Use Account locker in case deposit fails
-            receiver.try_deposit_or_abort(bucket, None);
+            receiver.try_deposit_or_abort(bucket.into(), None);
 
             // Send transfer out event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterTransferOutEvent {
