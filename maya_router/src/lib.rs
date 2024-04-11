@@ -17,7 +17,7 @@ mod maya_router {
 
     // MayaRouter owns vaults with fungible resources per Asgard Vault public key.
     struct MayaRouter {
-        vaults: KeyValueStore<(Ed25519PublicKey, ResourceAddress), FungibleVault>,
+        vaults: KeyValueStore<Ed25519PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
     }
 
     impl MayaRouter {
@@ -40,30 +40,42 @@ mod maya_router {
             asset: ResourceAddress,
             amount: Option<Decimal>,
         ) -> FungibleBucket {
-            let mut vault = match self.vaults.get_mut(&(asgard_vault, asset)) {
-                Some(vault) => vault,
-                None => Runtime::panic(format!(
-                    "Asgard Vault {:?} with asset {:?} not available",
-                    asgard_vault, asset
-                )),
+            // Check if Asgard Vault owns given asset
+            match self.vaults.get(&asgard_vault) {
+                Some(asset_vault_kv_store) => match asset_vault_kv_store.get(&asset) {
+                    Some(_) => (),
+                    None => Runtime::panic(format!(
+                        "asset {:?} not available in the asgard vault {:?}",
+                        asset, asgard_vault
+                    )),
+                },
+                None => Runtime::panic(format!("asgard vault {:?} not available", asgard_vault)),
             };
 
+            let mut asset_vault_kv_store = self
+                .vaults
+                .get_mut(&asgard_vault)
+                .expect("asgard vault should be present");
+            let mut vault = asset_vault_kv_store
+                .get_mut(&asset)
+                .expect("asset should be present");
+
             // Would be nice to remove empty vault from the store, but currently
-            // it is not possible to remove objects persisted in substore store.
+            // is not possible to remove objects persisted in substore store.
             match amount {
-                None => vault.take_all(),
                 Some(amount) => {
-                    if amount <= vault.amount() {
-                        vault.take(amount)
-                    } else {
+                    if amount > vault.amount() {
                         Runtime::panic(format!(
-                            "Asgard Vault asset {:?} balance {:?} lower than taken amount {:?}",
-                            asset,
+                            "asgard vault {:?} balance {:?} lower than taken amount {:?}",
+                            asgard_vault,
                             vault.amount(),
                             amount
                         ));
+                    } else {
+                        vault.take(amount)
                     }
                 }
+                None => vault.take_all(),
             }
         }
 
@@ -72,16 +84,31 @@ mod maya_router {
         fn asgard_vault_put(&mut self, asgard_vault: Ed25519PublicKey, bucket: FungibleBucket) {
             let asset = bucket.resource_address();
 
-            if self.vaults.get(&(asgard_vault, asset)).is_some() {
-                let mut vault = self
+            let (asgard_vault_exists, asset_exists) = match self.vaults.get(&asgard_vault) {
+                Some(asset_vault_kv_store) => (true, asset_vault_kv_store.get(&asset).is_some()),
+                None => (false, false),
+            };
+
+            if asgard_vault_exists {
+                let mut asset_vault_kv_store = self
                     .vaults
-                    .get_mut(&(asgard_vault, asset))
-                    .expect("asset should be present");
-                vault.put(bucket);
+                    .get_mut(&asgard_vault)
+                    .expect("asgard vault should be present");
+
+                if asset_exists {
+                    let mut vault = asset_vault_kv_store
+                        .get_mut(&asset)
+                        .expect("asset should be present");
+                    vault.put(bucket);
+                } else {
+                    asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
+                }
             } else {
-                self.vaults
-                    .insert((asgard_vault, asset), FungibleVault::with_bucket(bucket));
-            }
+                let asset_vault_kv_store = KeyValueStore::new();
+                asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
+
+                self.vaults.insert(asgard_vault, asset_vault_kv_store);
+            };
         }
 
         // Deposit some assets
