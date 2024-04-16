@@ -7,6 +7,11 @@ use scrypto_test::prelude::*;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+enum KeyType {
+    Ed25519,
+    Secp256k1,
+}
+
 struct Account {
     public_key: PublicKey,
     _private_key: PrivateKey,
@@ -15,15 +20,24 @@ struct Account {
 }
 
 impl Account {
-    fn new(ledger: &mut DefaultLedgerSimulator, is_virtual: bool) -> Self {
-        let (public_key, private_key, address) = ledger.new_account(is_virtual);
+    fn new(ledger: &mut DefaultLedgerSimulator, key_type: KeyType) -> Self {
+        let account: (PublicKey, PrivateKey, ComponentAddress) = match key_type {
+            KeyType::Ed25519 => {
+                let (public_key, private_key, address) = ledger.new_ed25519_virtual_account();
+                (public_key.into(), private_key.into(), address)
+            }
+            KeyType::Secp256k1 => {
+                let (public_key, private_key, address) = ledger.new_virtual_account();
+                (public_key.into(), private_key.into(), address)
+            }
+        };
 
-        let badge = NonFungibleGlobalId::from_public_key(&public_key);
+        let badge = NonFungibleGlobalId::from_public_key(&account.0);
 
         Account {
-            public_key: public_key.into(),
-            _private_key: private_key.into(),
-            address,
+            public_key: account.0,
+            _private_key: account.1,
+            address: account.2,
             badge,
         }
     }
@@ -64,10 +78,10 @@ impl MayaRouterSimulator {
     pub fn new() -> Self {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
-        let owner = Account::new(&mut ledger, true);
-        let asgard_vault_1 = Account::new(&mut ledger, true);
-        let asgard_vault_2 = Account::new(&mut ledger, true);
-        let swapper = Account::new(&mut ledger, false);
+        let owner = Account::new(&mut ledger, KeyType::Ed25519);
+        let asgard_vault_1 = Account::new(&mut ledger, KeyType::Secp256k1);
+        let asgard_vault_2 = Account::new(&mut ledger, KeyType::Ed25519);
+        let swapper = Account::new(&mut ledger, KeyType::Secp256k1);
 
         let mut resources = indexmap!();
         resources.insert("XRD".to_string(), XRD);
