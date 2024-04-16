@@ -18,7 +18,7 @@ mod maya_router {
     // MayaRouter owns vaults with fungible resources per Asgard Vault public key.
     struct MayaRouter {
         locker: Global<AccountLocker>,
-        vaults: KeyValueStore<Ed25519PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
+        vaults: KeyValueStore<PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
     }
 
     impl MayaRouter {
@@ -51,7 +51,7 @@ mod maya_router {
         // If amount is None, then taka all.
         fn asgard_vault_take(
             &mut self,
-            asgard_vault: Ed25519PublicKey,
+            asgard_vault: PublicKey,
             asset: ResourceAddress,
             amount: Option<Decimal>,
         ) -> FungibleBucket {
@@ -96,7 +96,7 @@ mod maya_router {
 
         // Put bucket of assets into the Asgard Vault.
         // If vault of assets does not exist, then create it.
-        fn asgard_vault_put(&mut self, asgard_vault: Ed25519PublicKey, bucket: FungibleBucket) {
+        fn asgard_vault_put(&mut self, asgard_vault: PublicKey, bucket: FungibleBucket) {
             let asset = bucket.resource_address();
 
             let (asgard_vault_exists, asset_exists) = match self.vaults.get(&asgard_vault) {
@@ -134,7 +134,7 @@ mod maya_router {
         pub fn deposit(
             &mut self,
             sender: Global<Account>,
-            asgard_vault: Ed25519PublicKey,
+            asgard_vault: PublicKey,
             bucket: FungibleBucket,
             memo: String,
         ) {
@@ -165,7 +165,7 @@ mod maya_router {
         //   memo         - message to emit when emitting sending the assets
         pub fn transfer_out(
             &mut self,
-            asgard_vault: Ed25519PublicKey,
+            asgard_vault: PublicKey,
             receiver: Global<Account>,
             asset: ResourceAddress,
             amount: Decimal,
@@ -192,8 +192,8 @@ mod maya_router {
 
         pub fn transfer_between_asgard_vaults(
             &mut self,
-            from_asgard_vault: Ed25519PublicKey,
-            to_asgard_vault: Ed25519PublicKey,
+            from_asgard_vault: PublicKey,
+            to_asgard_vault: PublicKey,
             asset: ResourceAddress,
             memo: String,
         ) {
@@ -218,29 +218,29 @@ mod maya_router {
     }
 }
 
-#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterDepositEvent {
-    pub sender: ComponentAddress,       // Address of the deposit sender
-    pub asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which controls deposited assets
-    pub asset: ResourceAddress,         // Resource address of the deposited assets
-    pub amount: Decimal,                // Amount of the deposited assets
-    pub memo: String,                   // Maya Transaction memo with user intent
+    pub sender: ComponentAddress, // Address of the deposit sender
+    pub asgard_vault: PublicKey,  // Public key of the Asgard Vault, which controls deposited assets
+    pub asset: ResourceAddress,   // Resource address of the deposited assets
+    pub amount: Decimal,          // Amount of the deposited assets
+    pub memo: String,             // Maya Transaction memo with user intent
 }
 
-#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterTransferOutEvent {
-    pub asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which sends assets
-    pub receiver: ComponentAddress,     // Address where assets were transferred
-    pub asset: ResourceAddress,         // Resource address of the transferred assets
-    pub amount: Decimal,                // Amount of the transferred assets
-    pub memo: String,                   // Maya Transaction memo with user intent
+    pub asgard_vault: PublicKey, // Public key of the Asgard Vault, which sends assets
+    pub receiver: ComponentAddress, // Address where assets were transferred
+    pub asset: ResourceAddress,  // Resource address of the transferred assets
+    pub amount: Decimal,         // Amount of the transferred assets
+    pub memo: String,            // Maya Transaction memo with user intent
 }
 
-#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterTransferAsgardVaultEvent {
-    pub from_asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which sends assets
-    pub to_asgard_vault: Ed25519PublicKey, // Public key of the Asgard Vault, which receives assets
-    pub asset: ResourceAddress,            // Resource address of the transferred assets
-    pub amount: Decimal,                   // Amount of the transferred assets
-    pub memo: String,                      // Maya Transaction memo with user intent
+    pub from_asgard_vault: PublicKey, // Public key of the Asgard Vault, which sends assets
+    pub to_asgard_vault: PublicKey,   // Public key of the Asgard Vault, which receives assets
+    pub asset: ResourceAddress,       // Resource address of the transferred assets
+    pub amount: Decimal,              // Amount of the transferred assets
+    pub memo: String,                 // Maya Transaction memo with user intent
 }

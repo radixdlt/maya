@@ -7,44 +7,22 @@ use scrypto_test::prelude::*;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-struct VirtualAccount {
-    public_key: Ed25519PublicKey,
-    _private_key: Ed25519PrivateKey,
+struct Account {
+    public_key: PublicKey,
+    _private_key: PrivateKey,
     address: ComponentAddress,
     badge: NonFungibleGlobalId,
 }
 
-impl VirtualAccount {
-    fn new(ledger: &mut DefaultLedgerSimulator) -> Self {
-        let (public_key, private_key, address) = ledger.new_ed25519_virtual_account();
+impl Account {
+    fn new(ledger: &mut DefaultLedgerSimulator, is_virtual: bool) -> Self {
+        let (public_key, private_key, address) = ledger.new_account(is_virtual);
 
         let badge = NonFungibleGlobalId::from_public_key(&public_key);
 
-        VirtualAccount {
-            public_key,
-            _private_key: private_key,
-            address,
-            badge,
-        }
-    }
-}
-
-struct AllocatedAccount {
-    _public_key: Secp256k1PublicKey,
-    _private_key: Secp256k1PrivateKey,
-    address: ComponentAddress,
-    badge: NonFungibleGlobalId,
-}
-
-impl AllocatedAccount {
-    fn new(ledger: &mut DefaultLedgerSimulator) -> Self {
-        let (public_key, private_key, address) = ledger.new_allocated_account();
-
-        let badge = NonFungibleGlobalId::from_public_key(&public_key);
-
-        AllocatedAccount {
-            _public_key: public_key,
-            _private_key: private_key,
+        Account {
+            public_key: public_key.into(),
+            _private_key: private_key.into(),
             address,
             badge,
         }
@@ -54,10 +32,10 @@ impl AllocatedAccount {
 struct MayaRouterSimulator {
     pub ledger: DefaultLedgerSimulator,
     pub component_address: ComponentAddress,
-    pub _owner: VirtualAccount,
-    pub asgard_vault_1: VirtualAccount,
-    pub asgard_vault_2: VirtualAccount,
-    pub swapper: AllocatedAccount,
+    pub _owner: Account,
+    pub asgard_vault_1: Account,
+    pub asgard_vault_2: Account,
+    pub swapper: Account,
     pub resources: IndexMap<String, ResourceAddress>,
 }
 
@@ -86,10 +64,10 @@ impl MayaRouterSimulator {
     pub fn new() -> Self {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
-        let owner = VirtualAccount::new(&mut ledger);
-        let asgard_vault_1 = VirtualAccount::new(&mut ledger);
-        let asgard_vault_2 = VirtualAccount::new(&mut ledger);
-        let swapper = AllocatedAccount::new(&mut ledger);
+        let owner = Account::new(&mut ledger, true);
+        let asgard_vault_1 = Account::new(&mut ledger, true);
+        let asgard_vault_2 = Account::new(&mut ledger, true);
+        let swapper = Account::new(&mut ledger, false);
 
         let mut resources = indexmap!();
         resources.insert("XRD".to_string(), XRD);
@@ -158,7 +136,7 @@ impl MayaRouterSimulator {
 
     pub fn deposit(
         &mut self,
-        asgard_vault: Ed25519PublicKey,
+        asgard_vault: PublicKey,
         from: ComponentAddress,
         badge: NonFungibleGlobalId,
         asset: ResourceAddress,
@@ -181,7 +159,7 @@ impl MayaRouterSimulator {
 
     pub fn transfer_out(
         &mut self,
-        asgard_vault: Ed25519PublicKey,
+        asgard_vault: PublicKey,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
         asset: ResourceAddress,
@@ -200,9 +178,9 @@ impl MayaRouterSimulator {
 
     pub fn transfer_out_asgard_vault(
         &mut self,
-        from_asgard_vault: Ed25519PublicKey,
+        from_asgard_vault: PublicKey,
         badge: NonFungibleGlobalId,
-        to_asgard_vault: Ed25519PublicKey,
+        to_asgard_vault: PublicKey,
         asset: ResourceAddress,
         memo: &str,
     ) -> TransactionReceipt {
