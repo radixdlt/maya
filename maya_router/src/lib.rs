@@ -17,18 +17,33 @@ mod maya_router {
 
     // MayaRouter owns vaults with fungible resources per Asgard Vault public key.
     struct MayaRouter {
+        locker: Global<AccountLocker>,
         vaults: KeyValueStore<Ed25519PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
     }
 
     impl MayaRouter {
         pub fn instantiate() -> Global<MayaRouter> {
-            let owner_role = OwnerRole::None;
+            let (maya_router_address_reservation, maya_router_component_address) =
+                Runtime::allocate_component_address(MayaRouter::blueprint_id());
+            let global_caller_badge_rule =
+                rule!(require(global_caller(maya_router_component_address)));
+
+            let locker = Blueprint::<AccountLocker>::instantiate(
+                OwnerRole::None,                  // owner
+                global_caller_badge_rule.clone(), // storer
+                rule!(deny_all),                  // storer_updater
+                rule!(deny_all),                  // recoverer
+                rule!(deny_all),                  // recoverer_updater
+                None,                             // address_reservation
+            );
 
             Self {
+                locker,
                 vaults: KeyValueStore::new(),
             }
             .instantiate()
-            .prepare_to_globalize(owner_role)
+            .prepare_to_globalize(OwnerRole::None)
+            .with_address(maya_router_address_reservation)
             .globalize()
         }
 
@@ -151,7 +166,7 @@ mod maya_router {
         pub fn transfer_out(
             &mut self,
             asgard_vault: Ed25519PublicKey,
-            mut receiver: Global<Account>,
+            receiver: Global<Account>,
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
@@ -163,8 +178,7 @@ mod maya_router {
 
             let bucket = self.asgard_vault_take(asgard_vault, asset, Some(amount));
 
-            // TODO: Use Account locker in case deposit fails
-            receiver.try_deposit_or_abort(bucket.into(), None);
+            self.locker.send_or_store(receiver, bucket.into());
 
             // Send transfer out event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterTransferOutEvent {
