@@ -178,7 +178,7 @@ mod maya_router {
 
             let bucket = self.asgard_vault_take(asgard_vault, asset, Some(amount));
 
-            self.locker.send_or_store(receiver, bucket.into());
+            self.locker.store(receiver, bucket.into(), true);
 
             // Send transfer out event to notify Bifrost Observer
             Runtime::emit_event(MayaRouterTransferOutEvent {
