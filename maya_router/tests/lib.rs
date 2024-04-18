@@ -4,23 +4,40 @@ use maya_router::{
 use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
-struct User {
-    public_key: Ed25519PublicKey,
-    _private_key: Ed25519PrivateKey,
+enum KeyType {
+    Ed25519,
+    Secp256k1,
+}
+
+struct Account {
+    public_key: PublicKey,
+    _private_key: PrivateKey,
     address: ComponentAddress,
     badge: NonFungibleGlobalId,
 }
 
-impl User {
-    fn new(ledger: &mut DefaultLedgerSimulator) -> Self {
-        let (public_key, private_key, address) = ledger.new_ed25519_virtual_account();
-        let badge = NonFungibleGlobalId::from_public_key(&public_key);
+impl Account {
+    fn new(ledger: &mut DefaultLedgerSimulator, key_type: KeyType) -> Self {
+        let account: (PublicKey, PrivateKey, ComponentAddress) = match key_type {
+            KeyType::Ed25519 => {
+                let (public_key, private_key, address) = ledger.new_ed25519_virtual_account();
+                (public_key.into(), private_key.into(), address)
+            }
+            KeyType::Secp256k1 => {
+                let (public_key, private_key, address) = ledger.new_virtual_account();
+                (public_key.into(), private_key.into(), address)
+            }
+        };
 
-        User {
-            public_key,
-            _private_key: private_key,
-            address,
+        let badge = NonFungibleGlobalId::from_public_key(&account.0);
+
+        Account {
+            public_key: account.0,
+            _private_key: account.1,
+            address: account.2,
             badge,
         }
     }
@@ -29,10 +46,10 @@ impl User {
 struct MayaRouterSimulator {
     pub ledger: DefaultLedgerSimulator,
     pub component_address: ComponentAddress,
-    pub _owner: User,
-    pub asgard_vault_1: User,
-    pub asgard_vault_2: User,
-    pub swapper: User,
+    pub _owner: Account,
+    pub asgard_vault_1: Account,
+    pub asgard_vault_2: Account,
+    pub swapper: Account,
     pub resources: IndexMap<String, ResourceAddress>,
 }
 
@@ -61,10 +78,10 @@ impl MayaRouterSimulator {
     pub fn new() -> Self {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
-        let owner = User::new(&mut ledger);
-        let asgard_vault_1 = User::new(&mut ledger);
-        let asgard_vault_2 = User::new(&mut ledger);
-        let swapper = User::new(&mut ledger);
+        let owner = Account::new(&mut ledger, KeyType::Ed25519);
+        let asgard_vault_1 = Account::new(&mut ledger, KeyType::Secp256k1);
+        let asgard_vault_2 = Account::new(&mut ledger, KeyType::Ed25519);
+        let swapper = Account::new(&mut ledger, KeyType::Secp256k1);
 
         let mut resources = indexmap!();
         resources.insert("XRD".to_string(), XRD);
@@ -94,6 +111,38 @@ impl MayaRouterSimulator {
         }
     }
 
+    pub fn get_account_locker(&mut self) -> Option<ComponentAddress> {
+        for component in self.ledger.find_all_components() {
+            if component.as_node_id().entity_type() == Some(EntityType::GlobalAccountLocker) {
+                return Some(component);
+            }
+        }
+        None
+    }
+
+    pub fn set_only_swapper_can_deposit(&mut self) {
+        let badge = ResourceOrNonFungible::NonFungible(self.swapper.badge.clone());
+        self.ledger.execute_manifest(
+            Self::manifest_builder()
+                .call_method(
+                    self.swapper.address,
+                    ACCOUNT_SET_DEFAULT_DEPOSIT_RULE_IDENT,
+                    AccountSetDefaultDepositRuleInput {
+                        default: DefaultDepositRule::Reject,
+                    },
+                )
+                .call_method(
+                    self.swapper.address,
+                    ACCOUNT_ADD_AUTHORIZED_DEPOSITOR,
+                    AccountAddAuthorizedDepositorInput {
+                        badge: badge.clone(),
+                    },
+                )
+                .build(),
+            vec![self.swapper.badge.clone()],
+        );
+    }
+
     pub fn get_swapper_balance(&mut self, asset: ResourceAddress) -> Decimal {
         self.ledger
             .get_component_balance(self.swapper.address, asset)
@@ -101,7 +150,7 @@ impl MayaRouterSimulator {
 
     pub fn deposit(
         &mut self,
-        asgard_vault: Ed25519PublicKey,
+        asgard_vault: PublicKey,
         from: ComponentAddress,
         badge: NonFungibleGlobalId,
         asset: ResourceAddress,
@@ -124,7 +173,7 @@ impl MayaRouterSimulator {
 
     pub fn transfer_out(
         &mut self,
-        asgard_vault: Ed25519PublicKey,
+        asgard_vault: PublicKey,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
         asset: ResourceAddress,
@@ -143,9 +192,9 @@ impl MayaRouterSimulator {
 
     pub fn transfer_out_asgard_vault(
         &mut self,
-        from_asgard_vault: Ed25519PublicKey,
+        from_asgard_vault: PublicKey,
         badge: NonFungibleGlobalId,
-        to_asgard_vault: Ed25519PublicKey,
+        to_asgard_vault: PublicKey,
         asset: ResourceAddress,
         memo: &str,
     ) -> TransactionReceipt {
@@ -176,7 +225,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         maya_router.swapper.address,
         maya_router.swapper.badge.clone(),
         XRD,
-        dec!(100),
+        dec!(200),
         swap_memo,
     );
 
@@ -201,51 +250,89 @@ fn maya_router_deposit_and_transfer_out_success() {
             sender: maya_router.swapper.address,
             asgard_vault: maya_router.asgard_vault_1.public_key,
             asset: XRD,
-            amount: dec!(100),
+            amount: dec!(200),
             memo: swap_memo.to_string(),
         }
     );
 
-    // Perform Send
-    // Arrange
-    let balance = maya_router.get_swapper_balance(XRD);
+    #[derive(EnumIter)]
+    enum TransferOut {
+        NoLockerUsed,
+        LockerUsed,
+    }
 
-    // Act
-    let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_1.public_key,
-        maya_router.asgard_vault_1.badge.clone(),
-        maya_router.swapper.address,
-        XRD,
-        dec!(100),
-        tx_out_memo,
-    );
+    for variant in TransferOut::iter() {
+        // Perform Send
+        // Arrange
+        let balance = maya_router.get_swapper_balance(XRD);
 
-    // Assert
-    let result = receipt.expect_commit_success();
-    let events = result.application_events.as_slice();
+        // Act
+        let receipt = maya_router.transfer_out(
+            maya_router.asgard_vault_1.public_key,
+            maya_router.asgard_vault_1.badge.clone(),
+            maya_router.swapper.address,
+            XRD,
+            dec!(100),
+            tx_out_memo,
+        );
 
-    let event_data = events
-        .iter()
-        .find(|(type_identifier, _)| {
-            type_identifier.eq(&EventTypeIdentifier(
-                Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
-                "MayaRouterTransferOutEvent".to_string(),
-            ))
-        })
-        .map(|(_, data)| data)
-        .expect("MayaRouterTransferOutEvent not found");
+        // Assert
+        let result = receipt.expect_commit_success();
+        let events = result.application_events.as_slice();
 
-    assert_eq!(
-        scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
-        MayaRouterTransferOutEvent {
-            asgard_vault: maya_router.asgard_vault_1.public_key,
-            receiver: maya_router.swapper.address,
-            asset: XRD,
-            amount: dec!(100),
-            memo: tx_out_memo.to_string(),
+        let event_data = events
+            .iter()
+            .find(|(type_identifier, _)| {
+                type_identifier.eq(&EventTypeIdentifier(
+                    Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
+                    "MayaRouterTransferOutEvent".to_string(),
+                ))
+            })
+            .map(|(_, data)| data)
+            .expect("MayaRouterTransferOutEvent not found");
+
+        assert_eq!(
+            scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
+            MayaRouterTransferOutEvent {
+                asgard_vault: maya_router.asgard_vault_1.public_key,
+                receiver: maya_router.swapper.address,
+                asset: XRD,
+                amount: dec!(100),
+                memo: tx_out_memo.to_string(),
+            }
+        );
+
+        match variant {
+            TransferOut::NoLockerUsed => {
+                assert_eq!(balance + dec!(100), maya_router.get_swapper_balance(XRD));
+
+                maya_router.set_only_swapper_can_deposit();
+            }
+            TransferOut::LockerUsed => {
+                let locker = maya_router.get_account_locker().unwrap();
+
+                let manifest = MayaRouterSimulator::manifest_builder()
+                    .call_method(
+                        locker,
+                        "claim",
+                        manifest_args!(maya_router.swapper.address, XRD, dec!(100)),
+                    )
+                    .try_deposit_entire_worktop_or_abort(
+                        maya_router.swapper.address,
+                        Some(ResourceOrNonFungible::NonFungible(
+                            maya_router.swapper.badge.clone(),
+                        )),
+                    )
+                    .build();
+                let receipt = maya_router
+                    .ledger
+                    .execute_manifest(manifest, vec![maya_router.swapper.badge.clone()]);
+                receipt.expect_commit_success();
+
+                assert_eq!(balance + dec!(100), maya_router.get_swapper_balance(XRD));
+            }
         }
-    );
-    assert_eq!(balance + dec!(100), maya_router.get_swapper_balance(XRD));
+    }
 }
 
 #[test]

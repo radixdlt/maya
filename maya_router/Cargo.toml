@@ -4,13 +4,14 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-# rev = 095108e467 is on feature/maya_router and includes get_owner_role() in HasRoleAssignment trait
-sbor = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
-scrypto = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
+sbor = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "ea63114fdb" }
+scrypto = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "ea63114fdb" }
 
 [dev-dependencies]
-scrypto-test = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
-radix-engine = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "095108e467" }
+scrypto-test = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "ea63114fdb" }
+radix-engine = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "ea63114fdb" }
+strum = { version = "0.26.2", features = ["derive"] }
+strum_macros = { version = "0.26.2" }
 
 [profile.release]
 opt-level = 'z'        # Optimize for size.
