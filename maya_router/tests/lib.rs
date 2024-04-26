@@ -1,5 +1,5 @@
 use maya_router::{
-    MayaRouterDepositEvent, MayaRouterTransferAsgardVaultEvent, MayaRouterTransferOutEvent,
+    MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterTransferVaultEvent,
 };
 use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
@@ -150,7 +150,7 @@ impl MayaRouterSimulator {
 
     pub fn deposit(
         &mut self,
-        asgard_vault: PublicKey,
+        vault_key: PublicKey,
         from: ComponentAddress,
         badge: NonFungibleGlobalId,
         asset: ResourceAddress,
@@ -164,7 +164,7 @@ impl MayaRouterSimulator {
                 builder.call_method(
                     self.component_address,
                     "deposit",
-                    manifest_args!(from, asgard_vault, bucket, memo.to_string()),
+                    manifest_args!(from, vault_key, bucket, memo.to_string()),
                 )
             })
             .build();
@@ -173,7 +173,7 @@ impl MayaRouterSimulator {
 
     pub fn transfer_out(
         &mut self,
-        asgard_vault: PublicKey,
+        vault_key: PublicKey,
         badge: NonFungibleGlobalId,
         to: ComponentAddress,
         asset: ResourceAddress,
@@ -184,25 +184,25 @@ impl MayaRouterSimulator {
             .call_method(
                 self.component_address,
                 "transfer_out",
-                manifest_args!(asgard_vault, to, asset, amount, memo.to_string()),
+                manifest_args!(vault_key, to, asset, amount, memo.to_string()),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
     }
 
-    pub fn transfer_out_asgard_vault(
+    pub fn transfer_between_vaults(
         &mut self,
-        from_asgard_vault: PublicKey,
+        from_vault_key: PublicKey,
         badge: NonFungibleGlobalId,
-        to_asgard_vault: PublicKey,
+        to_vault_key: PublicKey,
         asset: ResourceAddress,
         memo: &str,
     ) -> TransactionReceipt {
         let manifest = Self::manifest_builder()
             .call_method(
                 self.component_address,
-                "transfer_between_asgard_vaults",
-                manifest_args!(from_asgard_vault, to_asgard_vault, asset, memo.to_string()),
+                "transfer_between_vaults",
+                manifest_args!(from_vault_key, to_vault_key, asset, memo.to_string()),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
@@ -248,7 +248,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         scrypto_decode::<MayaRouterDepositEvent>(&event_data).unwrap(),
         MayaRouterDepositEvent {
             sender: maya_router.swapper.address,
-            asgard_vault: maya_router.asgard_vault_1.public_key,
+            vault_key: maya_router.asgard_vault_1.public_key,
             asset: XRD,
             amount: dec!(200),
             memo: swap_memo.to_string(),
@@ -294,7 +294,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         assert_eq!(
             scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
             MayaRouterTransferOutEvent {
-                asgard_vault: maya_router.asgard_vault_1.public_key,
+                vault_key: maya_router.asgard_vault_1.public_key,
                 receiver: maya_router.swapper.address,
                 asset: XRD,
                 amount: dec!(100),
@@ -455,7 +455,7 @@ fn maya_router_transfer_out_asset_not_available() {
     // Assert
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the asgard vault")
+            s.contains("asset") && s.contains("not available in the vault")
         }
         _ => false,
     });
@@ -483,7 +483,7 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
     // Assert
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asgard vault") && s.contains("not available")
+            s.contains("vault") && s.contains("not available")
         }
         _ => false,
     });
@@ -591,7 +591,7 @@ fn maya_router_multiple_asgard_vaults() {
     );
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the asgard vault")
+            s.contains("asset") && s.contains("not available in the vault")
         }
         _ => false,
     });
@@ -616,7 +616,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
     receipt.expect_commit_success();
 
     // Transfer XRD from Asgard Vault 1 to Asgard Vault 2
-    let receipt = maya_router.transfer_out_asgard_vault(
+    let receipt = maya_router.transfer_between_vaults(
         maya_router.asgard_vault_1.public_key,
         maya_router.asgard_vault_1.badge.clone(),
         maya_router.asgard_vault_2.public_key,
@@ -633,17 +633,17 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         .find(|(type_identifier, _)| {
             type_identifier.eq(&EventTypeIdentifier(
                 Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
-                "MayaRouterTransferAsgardVaultEvent".to_string(),
+                "MayaRouterTransferVaultEvent".to_string(),
             ))
         })
         .map(|(_, data)| data)
-        .expect("MayaRouterTransferAsgardVaultEvent not found");
+        .expect("MayaRouterTransferVaultEvent not found");
 
     assert_eq!(
-        scrypto_decode::<MayaRouterTransferAsgardVaultEvent>(&event_data).unwrap(),
-        MayaRouterTransferAsgardVaultEvent {
-            from_asgard_vault: maya_router.asgard_vault_1.public_key,
-            to_asgard_vault: maya_router.asgard_vault_2.public_key,
+        scrypto_decode::<MayaRouterTransferVaultEvent>(&event_data).unwrap(),
+        MayaRouterTransferVaultEvent {
+            from_vault_key: maya_router.asgard_vault_1.public_key,
+            to_vault_key: maya_router.asgard_vault_2.public_key,
             asset: XRD,
             amount: dec!(1000),
             memo: tx_out_memo.to_string(),
@@ -663,7 +663,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
     // Assert
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the asgard vault")
+            s.contains("asset") && s.contains("not available in the vault")
         }
         _ => false,
     });
