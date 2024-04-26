@@ -63,7 +63,10 @@ mod maya_router {
             amount: Option<Decimal>,
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
-            let (bucket, allowance_is_zero) = {
+            // Fee to lock is not deducted from allowance, because it is greater
+            // than a real fee. So the sum of allowances for given resouce will
+            // be greater than a resource amount in a vault.
+            let (bucket, vault_is_empty) = {
                 let mut vault = if asset == XRD {
                     let mut vault = self
                         .balances
@@ -96,12 +99,10 @@ mod maya_router {
 
                 let bucket = match amount {
                     Some(amount) => {
-                        if amount > vault.amount() {
+                        if amount > *allowance {
                             Runtime::panic(format!(
-                                "vault {:?} balance {:?} lower than taken amount {:?}",
-                                vault_key,
-                                vault.amount(),
-                                amount
+                                "vault {:?} allowance {:?} lower than taken amount {:?}",
+                                vault_key, *allowance, amount
                             ));
                         } else {
                             *allowance -= amount;
@@ -114,14 +115,14 @@ mod maya_router {
                     }
                 };
 
-                (bucket, allowance.is_zero())
+                (bucket, vault.is_empty())
             };
 
             // Cleanup
             // We don't clean up balances, since not possible to drop a Vault.
             // Also the chances that Vault is empty are really low and event if that's the case,
             // then it will be refilled soon anyway.
-            if allowance_is_zero {
+            if vault_is_empty {
                 self.allowances.remove(&(vault_key, asset));
             }
             bucket
