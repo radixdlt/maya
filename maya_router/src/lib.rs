@@ -22,7 +22,6 @@ mod maya_router {
     // MayaRouter owns vaults with fungible resources per Vault (eg. Asgard Vault) public key.
     struct MayaRouter {
         locker: Global<AccountLocker>,
-        // vaults: KeyValueStore<PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
         balances: KeyValueStore<ResourceAddress, FungibleVault>,
         allowances: KeyValueStore<AllowanceKey, Decimal>,
     }
@@ -64,12 +63,26 @@ mod maya_router {
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
             let (bucket, allowance_is_zero) = {
-                if fee_to_lock > 0.into() {
-                    self.balances
+                let mut vault = if asset == XRD {
+                    let mut vault = self
+                        .balances
                         .get_mut(&XRD)
-                        .expect("no XRD in the vault to lock fee")
-                        .lock_fee(fee_to_lock);
-                }
+                        .expect("asset XRD not available in the vault");
+                    if fee_to_lock > 0.into() {
+                        vault.lock_fee(fee_to_lock);
+                    }
+                    vault
+                } else {
+                    if fee_to_lock > 0.into() {
+                        self.balances
+                            .get_mut(&XRD)
+                            .expect("asset XRD not available in the vault")
+                            .lock_fee(fee_to_lock);
+                    }
+                    self.balances
+                        .get_mut(&asset)
+                        .expect(&format!("asset {:?} not available in the vault", asset))
+                };
 
                 // Check if indicated vault owns given asset
                 let mut allowance = match self.allowances.get_mut(&(vault_key, asset)) {
@@ -78,13 +91,6 @@ mod maya_router {
                         "asset {:?} not available in the vault {:?}",
                         asset, vault_key
                     )),
-                };
-
-                let mut vault = match self.balances.get_mut(&asset) {
-                    Some(vault) => vault,
-                    None => {
-                        Runtime::panic(format!("asset {:?} not available in the balances", asset))
-                    }
                 };
 
                 let bucket = match amount {
