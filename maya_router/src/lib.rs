@@ -50,7 +50,7 @@ mod maya_router {
         }
 
         // Take some amount of assets from the vault indicated by the given key.
-        // If amount is None, then taka all.
+        // If amount is None, then take all.
         fn vault_take(
             &mut self,
             vault_key: PublicKey,
@@ -58,38 +58,31 @@ mod maya_router {
             amount: Option<Decimal>,
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
-            // Check if indicated vault owns given asset
-            match self.vaults.get(&vault_key) {
-                Some(asset_vault_kv_store) => match asset_vault_kv_store.get(&asset) {
-                    Some(_) => (),
-                    None => Runtime::panic(format!(
-                        "asset {:?} not available in the vault {:?}",
-                        asset, vault_key
-                    )),
-                },
+            let mut asset_vault_kv_store = match self.vaults.get_mut(&vault_key) {
+                Some(asset_vault_kv_store) => asset_vault_kv_store,
                 None => Runtime::panic(format!("vault {:?} not available", vault_key)),
             };
 
-            let mut asset_vault_kv_store = self
-                .vaults
-                .get_mut(&vault_key)
-                .expect("vault should be present");
-
-            info!("fee_to_lock = {:?}", fee_to_lock);
-            if fee_to_lock > 0.into() {
-                info!(
-                    "XRD vault balance = {:?}",
-                    asset_vault_kv_store.get(&XRD).unwrap().amount()
-                );
-                asset_vault_kv_store
+            let mut vault = if asset == XRD {
+                let mut vault = asset_vault_kv_store
                     .get_mut(&XRD)
-                    .expect("no XRD in the vault to lock fee")
-                    .lock_fee(fee_to_lock);
-            }
-
-            let mut vault = asset_vault_kv_store
-                .get_mut(&asset)
-                .expect("asset should be present");
+                    .expect("asset XRD not available in the vault");
+                if fee_to_lock > 0.into() {
+                    vault.lock_fee(fee_to_lock);
+                }
+                vault
+            } else {
+                if fee_to_lock > 0.into() {
+                    asset_vault_kv_store
+                        .get_mut(&XRD)
+                        .expect("asset XRD not available in the vault")
+                        .lock_fee(fee_to_lock);
+                }
+                asset_vault_kv_store.get_mut(&asset).expect(&format!(
+                    "asset {:?} not available in the vault {:?}",
+                    asset, vault_key
+                ))
+            };
 
             // Would be nice to remove empty vault from the store, but currently
             // is not possible to remove objects persisted in substore store.
