@@ -272,7 +272,6 @@ fn maya_router_deposit_and_transfer_out_success() {
         // Arrange
         let balance = maya_router.get_swapper_balance(XRD);
 
-        println!("transfer_out");
         // Act
         let receipt = maya_router.transfer_out(
             maya_router.asgard_vault_1.public_key,
@@ -413,9 +412,9 @@ fn maya_router_transfer_out_too_big_amount() {
         maya_router.asgard_vault_1.badge.clone(),
         maya_router.swapper.address,
         XRD,
-        dec!(101),
+        dec!(91),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
 
     // Assert
@@ -450,25 +449,27 @@ fn maya_router_transfer_out_asset_not_available() {
     // Assert
     receipt.expect_commit_success();
 
-    // Perform Send of non-existing asset
-    // Act
-    let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_1.public_key,
-        maya_router.asgard_vault_1.badge.clone(),
-        maya_router.swapper.address,
-        *maya_router.resources.get("USDT").unwrap(),
-        dec!(100),
-        tx_out_memo,
-        dec!(10),
-    );
+    for fee_to_lock in [dec!(10), dec!(0)] {
+        // Perform Send of non-existing asset
+        // Act
+        let receipt = maya_router.transfer_out(
+            maya_router.asgard_vault_1.public_key,
+            maya_router.asgard_vault_1.badge.clone(),
+            maya_router.swapper.address,
+            *maya_router.resources.get("USDT").unwrap(),
+            dec!(100),
+            tx_out_memo,
+            fee_to_lock,
+        );
 
-    // Assert
-    receipt.expect_specific_failure(|e| match e {
-        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the vault")
-        }
-        _ => false,
-    });
+        // Assert
+        receipt.expect_specific_failure(|e| match e {
+            RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+                s.contains("asset") && s.contains("not available in the vault")
+            }
+            _ => false,
+        });
+    }
 }
 
 #[test]
@@ -479,25 +480,36 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
     // Act
     let tx_out_memo = "OUT:";
 
-    // Perform Send from non-existing Asgard Vault
-    // Act
-    let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_1.public_key,
-        maya_router.asgard_vault_1.badge.clone(),
-        maya_router.swapper.address,
-        *maya_router.resources.get("USDT").unwrap(),
-        dec!(100),
-        tx_out_memo,
-        dec!(0),
-    );
+    for fee_to_lock in [dec!(10), dec!(0)] {
+        // Perform Send from non-existing Asgard Vault
+        // Act
+        let receipt = maya_router.transfer_out(
+            maya_router.asgard_vault_1.public_key,
+            maya_router.asgard_vault_1.badge.clone(),
+            maya_router.swapper.address,
+            *maya_router.resources.get("USDT").unwrap(),
+            dec!(100),
+            tx_out_memo,
+            fee_to_lock,
+        );
 
-    // Assert
-    receipt.expect_specific_failure(|e| match e {
-        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("vault") && s.contains("not available")
+        // Assert
+        if fee_to_lock.is_zero() {
+            receipt.expect_specific_failure(|e| match e {
+                RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+                    s.contains("vault") && s.contains("not available")
+                }
+                _ => false,
+            });
+        } else {
+            receipt.expect_specific_rejection(|e| match e {
+                RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+                    RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)),
+                ) => s.contains("vault") && s.contains("not available"),
+                _ => false,
+            });
         }
-        _ => false,
-    });
+    }
 }
 
 #[test]
@@ -523,23 +535,37 @@ fn maya_router_transfer_out_assert_access_rule_failed() {
     // Assert
     receipt.expect_commit_success();
 
-    // Act
-    // Expect AssertAccessRuleFailed when using Asgard Vault 2 badge for Asgard Vault 1
-    let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_1.public_key,
-        maya_router.asgard_vault_2.badge.clone(),
-        maya_router.swapper.address,
-        *maya_router.resources.get("USDT").unwrap(),
-        dec!(100),
-        tx_out_memo,
-        dec!(0),
-    );
-    receipt.expect_specific_failure(|e| {
-        matches!(
-            e,
-            RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
-        )
-    });
+    for fee_to_lock in [dec!(10), dec!(0)] {
+        // Act
+        // Expect AssertAccessRuleFailed when using Asgard Vault 2 badge for Asgard Vault 1
+        let receipt = maya_router.transfer_out(
+            maya_router.asgard_vault_1.public_key,
+            maya_router.asgard_vault_2.badge.clone(),
+            maya_router.swapper.address,
+            *maya_router.resources.get("USDT").unwrap(),
+            dec!(100),
+            tx_out_memo,
+            fee_to_lock,
+        );
+
+        if fee_to_lock.is_zero() {
+            receipt.expect_specific_failure(|e| {
+                matches!(
+                    e,
+                    RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
+                )
+            });
+        } else {
+            receipt.expect_specific_rejection(|e| {
+                matches!(
+                    e,
+                    RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+                        RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
+                    )
+                )
+            });
+        }
+    }
 }
 
 #[test]
@@ -556,6 +582,16 @@ fn maya_router_multiple_asgard_vaults() {
         maya_router.swapper.badge.clone(),
         XRD,
         dec!(1000),
+        swap_memo,
+    );
+    receipt.expect_commit_success();
+
+    let receipt = maya_router.deposit(
+        maya_router.asgard_vault_2.public_key,
+        maya_router.swapper.address,
+        maya_router.swapper.badge.clone(),
+        XRD,
+        dec!(500),
         swap_memo,
     );
     receipt.expect_commit_success();
@@ -590,19 +626,19 @@ fn maya_router_multiple_asgard_vaults() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
     receipt.expect_commit_success();
 
-    // Expect resources not available when trying to transfer XRD from Asgard Vault 2
+    // Expect resources not available when trying to transfer USDT from Asgard Vault 1
     let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_2.public_key,
-        maya_router.asgard_vault_2.badge.clone(),
+        maya_router.asgard_vault_1.public_key,
+        maya_router.asgard_vault_1.badge.clone(),
         maya_router.swapper.address,
-        XRD,
+        *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
@@ -665,24 +701,39 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         }
     );
 
-    // Try Transfer out XRD from Asgard Vault 1
-    let receipt = maya_router.transfer_out(
-        maya_router.asgard_vault_1.public_key,
-        maya_router.asgard_vault_1.badge.clone(),
-        maya_router.swapper.address,
-        *maya_router.resources.get("USDT").unwrap(),
-        dec!(100),
-        tx_out_memo,
-        dec!(0),
-    );
+    for fee_to_lock in [dec!(10), dec!(0)] {
+        // Try Transfer out XRD from Asgard Vault 1
+        let receipt = maya_router.transfer_out(
+            maya_router.asgard_vault_1.public_key,
+            maya_router.asgard_vault_1.badge.clone(),
+            maya_router.swapper.address,
+            *maya_router.resources.get("USDT").unwrap(),
+            dec!(100),
+            tx_out_memo,
+            fee_to_lock,
+        );
 
-    // Assert
-    receipt.expect_specific_failure(|e| match e {
-        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the vault")
+        // Assert
+        if fee_to_lock.is_zero() {
+            receipt.expect_specific_failure(|e| match e {
+                RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+                    s.contains("asset") && s.contains("not available in the vault")
+                }
+                _ => false,
+            });
+        } else {
+            receipt.expect_specific_rejection(|e| {
+                matches!(
+                    e,
+                    &RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+                        RuntimeError::ApplicationError(ApplicationError::VaultError(
+                            VaultError::LockFeeInsufficientBalance { .. }
+                        ))
+                    )
+                )
+            });
         }
-        _ => false,
-    });
+    }
 
     // Transfer out XRD from Asgard Vault 2
     let receipt = maya_router.transfer_out(
@@ -692,7 +743,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         XRD,
         dec!(100),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
     receipt.expect_commit_success();
 }
