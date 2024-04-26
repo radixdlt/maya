@@ -18,7 +18,9 @@ mod maya_router {
     // MayaRouter owns vaults with fungible resources per Vault (eg. Asgard Vault) public key.
     struct MayaRouter {
         locker: Global<AccountLocker>,
-        vaults: KeyValueStore<PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
+        // vaults: KeyValueStore<PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
+        balances: KeyValueStore<ResourceAddress, FungibleVault>,
+        allowances: KeyValueStore<(PublicKey, ResourceAddress), Decimal>,
     }
 
     impl MayaRouter {
@@ -39,7 +41,9 @@ mod maya_router {
 
             Self {
                 locker,
-                vaults: KeyValueStore::new(),
+                // vaults: KeyValueStore::new(),
+                balances: KeyValueStore::new(),
+                allowances: KeyValueStore::new(),
             }
             .instantiate()
             .prepare_to_globalize(OwnerRole::None)
@@ -54,58 +58,66 @@ mod maya_router {
             vault_key: PublicKey,
             asset: ResourceAddress,
             amount: Option<Decimal>,
-            fee_to_lock: Decimal,
+            _fee_to_lock: Decimal,
         ) -> FungibleBucket {
-            // Check if indicated vault owns given asset
-            match self.vaults.get(&vault_key) {
-                Some(asset_vault_kv_store) => match asset_vault_kv_store.get(&asset) {
-                    Some(_) => (),
+            let (bucket, allowance_is_zero) = {
+                // Check if indicated vault owns given asset
+                let mut allowance = match self.allowances.get_mut(&(vault_key, asset)) {
+                    Some(entry) => entry,
                     None => Runtime::panic(format!(
                         "asset {:?} not available in the vault {:?}",
                         asset, vault_key
                     )),
-                },
-                None => Runtime::panic(format!("vault {:?} not available", vault_key)),
+                };
+                // info!("fee_to_lock = {:?}", fee_to_lock);
+                // if fee_to_lock > 0.into() {
+                //     info!(
+                //         "XRD vault balance = {:?}",
+                //         asset_vault_kv_store.get(&XRD).unwrap().amount()
+                //     );
+                //     asset_vault_kv_store
+                //         .get_mut(&XRD)
+                //         .expect("no XRD in the vault to lock fee")
+                //         .lock_fee(fee_to_lock);
+                // }
+                let mut vault = match self.balances.get_mut(&asset) {
+                    Some(vault) => vault,
+                    None => {
+                        Runtime::panic(format!("asset {:?} not available in the balances", asset))
+                    }
+                };
+
+                let bucket = match amount {
+                    Some(amount) => {
+                        if amount > vault.amount() {
+                            Runtime::panic(format!(
+                                "vault {:?} balance {:?} lower than taken amount {:?}",
+                                vault_key,
+                                vault.amount(),
+                                amount
+                            ));
+                        } else {
+                            *allowance -= amount;
+                            vault.take(amount)
+                        }
+                    }
+                    None => {
+                        *allowance -= vault.amount();
+                        vault.take_all()
+                    }
+                };
+
+                (bucket, allowance.is_zero())
             };
 
-            let mut asset_vault_kv_store = self
-                .vaults
-                .get_mut(&vault_key)
-                .expect("vault should be present");
-
-            info!("fee_to_lock = {:?}", fee_to_lock);
-            if fee_to_lock > 0.into() {
-                info!(
-                    "XRD vault balance = {:?}",
-                    asset_vault_kv_store.get(&XRD).unwrap().amount()
-                );
-                asset_vault_kv_store
-                    .get_mut(&XRD)
-                    .expect("no XRD in the vault to lock fee")
-                    .lock_fee(fee_to_lock);
+            // Cleanup
+            // We don't clean up balances, since not possible to drop a Vault.
+            // Also the chances that Vault is empty are really low and event if that's the case,
+            // then they will be refilled soon anyway.
+            if allowance_is_zero {
+                self.allowances.remove(&(vault_key, asset));
             }
-
-            let mut vault = asset_vault_kv_store
-                .get_mut(&asset)
-                .expect("asset should be present");
-
-            // Would be nice to remove empty vault from the store, but currently
-            // is not possible to remove objects persisted in substore store.
-            match amount {
-                Some(amount) => {
-                    if amount > vault.amount() {
-                        Runtime::panic(format!(
-                            "vault {:?} balance {:?} lower than taken amount {:?}",
-                            vault_key,
-                            vault.amount(),
-                            amount
-                        ));
-                    } else {
-                        vault.take(amount)
-                    }
-                }
-                None => vault.take_all(),
-            }
+            bucket
         }
 
         // Put bucket of assets into the vault indicated by the given key.
@@ -113,31 +125,26 @@ mod maya_router {
         fn vault_put(&mut self, vault_key: PublicKey, bucket: FungibleBucket) {
             let asset = bucket.resource_address();
 
-            let (vault_exists, asset_exists) = match self.vaults.get(&vault_key) {
-                Some(asset_vault_kv_store) => (true, asset_vault_kv_store.get(&asset).is_some()),
-                None => (false, false),
-            };
-
-            if vault_exists {
-                let mut asset_vault_kv_store = self
-                    .vaults
-                    .get_mut(&vault_key)
-                    .expect("vault should be present");
-
-                if asset_exists {
-                    let mut vault = asset_vault_kv_store
-                        .get_mut(&asset)
-                        .expect("asset should be present");
-                    vault.put(bucket);
-                } else {
-                    asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
-                }
+            if self.allowances.get(&(vault_key, asset)).is_some() {
+                let mut allowance = self
+                    .allowances
+                    .get_mut(&(vault_key, asset))
+                    .expect("vault allowance should be present");
+                *allowance += bucket.amount();
             } else {
-                let asset_vault_kv_store = KeyValueStore::new();
-                asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
+                self.allowances.insert((vault_key, asset), bucket.amount());
+            }
 
-                self.vaults.insert(vault_key, asset_vault_kv_store);
-            };
+            if self.balances.get(&asset).is_some() {
+                let mut vault = self
+                    .balances
+                    .get_mut(&asset)
+                    .expect("asset should be present");
+                vault.put(bucket);
+            } else {
+                self.balances
+                    .insert(asset, FungibleVault::with_bucket(bucket));
+            }
         }
 
         // Deposit some assets

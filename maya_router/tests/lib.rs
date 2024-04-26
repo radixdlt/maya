@@ -281,7 +281,8 @@ fn maya_router_deposit_and_transfer_out_success() {
             XRD,
             dec!(100),
             tx_out_memo,
-            dec!(10),
+            dec!(0),
+            // dec!(10),
         );
 
         // Assert
@@ -459,7 +460,8 @@ fn maya_router_transfer_out_asset_not_available() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
-        dec!(10),
+        dec!(0),
+        // dec!(10),
     );
 
     // Assert
