@@ -1,8 +1,6 @@
 use scrypto::prelude::*;
 
 #[blueprint]
-#[types(ResourceAddress, FungibleVault)]
-#[types(PublicKey, KeyValueStore<ResourceAddress, FungibleVault>)]
 #[events(
     MayaRouterDepositEvent,
     MayaRouterTransferOutEvent,
@@ -41,7 +39,7 @@ mod maya_router {
 
             Self {
                 locker,
-                vaults: KeyValueStore::new_with_registered_type(),
+                vaults: KeyValueStore::new(),
             }
             .instantiate()
             .prepare_to_globalize(OwnerRole::None)
@@ -135,7 +133,7 @@ mod maya_router {
                     asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
                 }
             } else {
-                let asset_vault_kv_store = KeyValueStore::new_with_registered_type();
+                let asset_vault_kv_store = KeyValueStore::new();
                 asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
 
                 self.vaults.insert(vault_key, asset_vault_kv_store);
