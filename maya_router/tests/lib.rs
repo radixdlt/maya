@@ -272,7 +272,6 @@ fn maya_router_deposit_and_transfer_out_success() {
         // Arrange
         let balance = maya_router.get_swapper_balance(XRD);
 
-        println!("transfer_out");
         // Act
         let receipt = maya_router.transfer_out(
             maya_router.asgard_vault_1.public_key,
@@ -281,8 +280,7 @@ fn maya_router_deposit_and_transfer_out_success() {
             XRD,
             dec!(100),
             tx_out_memo,
-            dec!(0),
-            // dec!(10),
+            dec!(10),
         );
 
         // Assert
@@ -460,8 +458,7 @@ fn maya_router_transfer_out_asset_not_available() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
-        dec!(0),
-        // dec!(10),
+        dec!(10),
     );
 
     // Assert

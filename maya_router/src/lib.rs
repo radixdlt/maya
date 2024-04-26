@@ -1,6 +1,10 @@
 use scrypto::prelude::*;
 
+type AllowanceKey = (PublicKey, ResourceAddress);
+
 #[blueprint]
+#[types(ResourceAddress, FungibleVault)]
+#[types(AllowanceKey, Decimal)]
 #[events(
     MayaRouterDepositEvent,
     MayaRouterTransferOutEvent,
@@ -20,7 +24,7 @@ mod maya_router {
         locker: Global<AccountLocker>,
         // vaults: KeyValueStore<PublicKey, KeyValueStore<ResourceAddress, FungibleVault>>,
         balances: KeyValueStore<ResourceAddress, FungibleVault>,
-        allowances: KeyValueStore<(PublicKey, ResourceAddress), Decimal>,
+        allowances: KeyValueStore<AllowanceKey, Decimal>,
     }
 
     impl MayaRouter {
@@ -41,9 +45,8 @@ mod maya_router {
 
             Self {
                 locker,
-                // vaults: KeyValueStore::new(),
-                balances: KeyValueStore::new(),
-                allowances: KeyValueStore::new(),
+                balances: KeyValueStore::new_with_registered_type(),
+                allowances: KeyValueStore::new_with_registered_type(),
             }
             .instantiate()
             .prepare_to_globalize(OwnerRole::None)
@@ -52,13 +55,13 @@ mod maya_router {
         }
 
         // Take some amount of assets from the vault indicated by the given key.
-        // If amount is None, then taka all.
+        // If amount is None, then take all.
         fn vault_take(
             &mut self,
             vault_key: PublicKey,
             asset: ResourceAddress,
             amount: Option<Decimal>,
-            _fee_to_lock: Decimal,
+            fee_to_lock: Decimal,
         ) -> FungibleBucket {
             let (bucket, allowance_is_zero) = {
                 // Check if indicated vault owns given asset
@@ -69,17 +72,14 @@ mod maya_router {
                         asset, vault_key
                     )),
                 };
-                // info!("fee_to_lock = {:?}", fee_to_lock);
-                // if fee_to_lock > 0.into() {
-                //     info!(
-                //         "XRD vault balance = {:?}",
-                //         asset_vault_kv_store.get(&XRD).unwrap().amount()
-                //     );
-                //     asset_vault_kv_store
-                //         .get_mut(&XRD)
-                //         .expect("no XRD in the vault to lock fee")
-                //         .lock_fee(fee_to_lock);
-                // }
+
+                if fee_to_lock > 0.into() {
+                    self.balances
+                        .get_mut(&XRD)
+                        .expect("no XRD in the vault to lock fee")
+                        .lock_fee(fee_to_lock);
+                }
+
                 let mut vault = match self.balances.get_mut(&asset) {
                     Some(vault) => vault,
                     None => {
