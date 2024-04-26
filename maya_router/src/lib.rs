@@ -1,5 +1,6 @@
 use scrypto::prelude::*;
 
+// This alias is used to cheat 'types' macro, which seem to not support tuple values
 type AllowanceKey = (PublicKey, ResourceAddress);
 
 #[blueprint]
@@ -119,7 +120,7 @@ mod maya_router {
             // Cleanup
             // We don't clean up balances, since not possible to drop a Vault.
             // Also the chances that Vault is empty are really low and event if that's the case,
-            // then they will be refilled soon anyway.
+            // then it will be refilled soon anyway.
             if allowance_is_zero {
                 self.allowances.remove(&(vault_key, asset));
             }
