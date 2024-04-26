@@ -179,12 +179,18 @@ impl MayaRouterSimulator {
         asset: ResourceAddress,
         amount: Decimal,
         memo: &str,
+        fee_to_lock: Decimal,
     ) -> TransactionReceipt {
-        let manifest = Self::manifest_builder()
+        let builder = if fee_to_lock <= 0.into() {
+            Self::manifest_builder()
+        } else {
+            ManifestBuilder::new()
+        };
+        let manifest = builder
             .call_method(
                 self.component_address,
                 "transfer_out",
-                manifest_args!(vault_key, to, asset, amount, memo.to_string()),
+                manifest_args!(vault_key, to, asset, amount, memo.to_string(), fee_to_lock),
             )
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
@@ -225,7 +231,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         maya_router.swapper.address,
         maya_router.swapper.badge.clone(),
         XRD,
-        dec!(200),
+        dec!(1000),
         swap_memo,
     );
 
@@ -250,7 +256,7 @@ fn maya_router_deposit_and_transfer_out_success() {
             sender: maya_router.swapper.address,
             vault_key: maya_router.asgard_vault_1.public_key,
             asset: XRD,
-            amount: dec!(200),
+            amount: dec!(1000),
             memo: swap_memo.to_string(),
         }
     );
@@ -266,6 +272,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         // Arrange
         let balance = maya_router.get_swapper_balance(XRD);
 
+        println!("transfer_out");
         // Act
         let receipt = maya_router.transfer_out(
             maya_router.asgard_vault_1.public_key,
@@ -274,6 +281,7 @@ fn maya_router_deposit_and_transfer_out_success() {
             XRD,
             dec!(100),
             tx_out_memo,
+            dec!(10),
         );
 
         // Assert
@@ -407,6 +415,7 @@ fn maya_router_transfer_out_too_big_amount() {
         XRD,
         dec!(101),
         tx_out_memo,
+        dec!(0),
     );
 
     // Assert
@@ -450,6 +459,7 @@ fn maya_router_transfer_out_asset_not_available() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
+        dec!(10),
     );
 
     // Assert
@@ -478,6 +488,7 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
 
     // Assert
@@ -521,6 +532,7 @@ fn maya_router_transfer_out_assert_access_rule_failed() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
     receipt.expect_specific_failure(|e| {
         matches!(
@@ -566,6 +578,7 @@ fn maya_router_multiple_asgard_vaults() {
         XRD,
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
     receipt.expect_commit_success();
 
@@ -577,6 +590,7 @@ fn maya_router_multiple_asgard_vaults() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
     receipt.expect_commit_success();
 
@@ -588,6 +602,7 @@ fn maya_router_multiple_asgard_vaults() {
         XRD,
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
@@ -658,6 +673,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         *maya_router.resources.get("USDT").unwrap(),
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
 
     // Assert
@@ -676,6 +692,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         XRD,
         dec!(100),
         tx_out_memo,
+        dec!(0),
     );
     receipt.expect_commit_success();
 }

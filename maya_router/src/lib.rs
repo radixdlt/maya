@@ -54,6 +54,7 @@ mod maya_router {
             vault_key: PublicKey,
             asset: ResourceAddress,
             amount: Option<Decimal>,
+            fee_to_lock: Decimal,
         ) -> FungibleBucket {
             // Check if indicated vault owns given asset
             match self.vaults.get(&vault_key) {
@@ -71,6 +72,19 @@ mod maya_router {
                 .vaults
                 .get_mut(&vault_key)
                 .expect("vault should be present");
+
+            info!("fee_to_lock = {:?}", fee_to_lock);
+            if fee_to_lock > 0.into() {
+                info!(
+                    "XRD vault balance = {:?}",
+                    asset_vault_kv_store.get(&XRD).unwrap().amount()
+                );
+                asset_vault_kv_store
+                    .get_mut(&XRD)
+                    .expect("no XRD in the vault to lock fee")
+                    .lock_fee(fee_to_lock);
+            }
+
             let mut vault = asset_vault_kv_store
                 .get_mut(&asset)
                 .expect("asset should be present");
@@ -170,13 +184,14 @@ mod maya_router {
             asset: ResourceAddress,
             amount: Decimal,
             memo: String,
+            fee_to_lock: Decimal,
         ) {
             // Make sure the vault account's owner's proof is present when calling this method.
             Runtime::assert_access_rule(rule!(require(NonFungibleGlobalId::from_public_key(
                 &vault_key
             ))));
 
-            let bucket = self.vault_take(vault_key, asset, Some(amount));
+            let bucket = self.vault_take(vault_key, asset, Some(amount), fee_to_lock);
 
             self.locker.store(receiver, bucket.into(), true);
 
@@ -202,7 +217,7 @@ mod maya_router {
                 &from_vault_key
             ))));
 
-            let bucket = self.vault_take(from_vault_key, asset, None);
+            let bucket = self.vault_take(from_vault_key, asset, None, dec!(0));
             let amount = bucket.amount();
             self.vault_put(to_vault_key, bucket);
 
