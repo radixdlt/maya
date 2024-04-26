@@ -64,6 +64,13 @@ mod maya_router {
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
             let (bucket, allowance_is_zero) = {
+                if fee_to_lock > 0.into() {
+                    self.balances
+                        .get_mut(&XRD)
+                        .expect("no XRD in the vault to lock fee")
+                        .lock_fee(fee_to_lock);
+                }
+
                 // Check if indicated vault owns given asset
                 let mut allowance = match self.allowances.get_mut(&(vault_key, asset)) {
                     Some(entry) => entry,
@@ -72,13 +79,6 @@ mod maya_router {
                         asset, vault_key
                     )),
                 };
-
-                if fee_to_lock > 0.into() {
-                    self.balances
-                        .get_mut(&XRD)
-                        .expect("no XRD in the vault to lock fee")
-                        .lock_fee(fee_to_lock);
-                }
 
                 let mut vault = match self.balances.get_mut(&asset) {
                     Some(vault) => vault,
