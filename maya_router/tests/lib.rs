@@ -463,7 +463,7 @@ fn maya_router_transfer_out_asset_not_available() {
         // Assert
         receipt.expect_specific_failure(|e| match e {
             RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                s.contains("asset") && s.contains("not available in the vault")
+                s.contains("Asset") && s.contains("not available in the vault")
             }
             _ => false,
         });
@@ -640,7 +640,7 @@ fn maya_router_multiple_asgard_vaults() {
     );
     receipt.expect_specific_failure(|e| match e {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            s.contains("asset") && s.contains("not available in the vault")
+            s.contains("Asset") && s.contains("not available in the vault")
         }
         _ => false,
     });
@@ -715,7 +715,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         if fee_to_lock.is_zero() {
             receipt.expect_specific_failure(|e| match e {
                 RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                    s.contains("asset") && s.contains("not available in the vault")
+                    s.contains("Asset") && s.contains("not available in the vault")
                 }
                 _ => false,
             });

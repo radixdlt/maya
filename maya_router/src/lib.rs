@@ -69,7 +69,7 @@ mod maya_router {
             let mut vault = if asset == XRD {
                 let mut vault = vault_resources
                     .get_mut(&XRD)
-                    .expect("asset XRD not available in the vault");
+                    .expect("Asset XRD not available in the vault");
                 if fee_to_lock.is_positive() {
                     vault.lock_fee(fee_to_lock);
                 }
@@ -78,11 +78,11 @@ mod maya_router {
                 if fee_to_lock.is_positive() {
                     vault_resources
                         .get_mut(&XRD)
-                        .expect("asset XRD not available in the vault")
+                        .expect("Asset XRD not available in the vault")
                         .lock_fee(fee_to_lock);
                 }
-                    "asset {:?} not available in the vault {:?}",
                 vault_resources.get_mut(&asset).expect(&format!(
+                    "Asset {:?} not available in the vault {:?}",
                     asset, vault_key
                 ))
             };
@@ -93,7 +93,7 @@ mod maya_router {
                 Some(amount) => {
                     if amount > vault.amount() {
                         Runtime::panic(format!(
-                            "vault {:?} balance {:?} lower than taken amount {:?}",
+                            "Vault {:?} balance {:?} lower than taken amount {:?}",
                             vault_key,
                             vault.amount(),
                             amount
@@ -120,12 +120,12 @@ mod maya_router {
                 let mut vault_resources = self
                     .vaults
                     .get_mut(&vault_key)
-                    .expect("vault should be present");
+                    .expect("Vault should be present");
 
                 if asset_exists {
                     let mut vault = vault_resources
                         .get_mut(&asset)
-                        .expect("asset should be present");
+                        .expect("Asset should be present");
                     vault.put(bucket);
                 } else {
                     vault_resources.insert(asset, FungibleVault::with_bucket(bucket));
