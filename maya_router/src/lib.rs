@@ -58,8 +58,8 @@ mod maya_router {
             amount: Option<Decimal>,
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
-            let mut asset_vault_kv_store = match self.vaults.get_mut(&vault_key) {
-                Some(asset_vault_kv_store) => asset_vault_kv_store,
+            let mut vault_resources = match self.vaults.get_mut(&vault_key) {
+                Some(vault_resources) => vault_resources,
                 None => Runtime::panic(format!(
                     "No resource has been deposited to vault {:?}",
                     vault_key
@@ -67,7 +67,7 @@ mod maya_router {
             };
 
             let mut vault = if asset == XRD {
-                let mut vault = asset_vault_kv_store
+                let mut vault = vault_resources
                     .get_mut(&XRD)
                     .expect("asset XRD not available in the vault");
                 if fee_to_lock.is_positive() {
@@ -76,13 +76,13 @@ mod maya_router {
                 vault
             } else {
                 if fee_to_lock.is_positive() {
-                    asset_vault_kv_store
+                    vault_resources
                         .get_mut(&XRD)
                         .expect("asset XRD not available in the vault")
                         .lock_fee(fee_to_lock);
                 }
-                asset_vault_kv_store.get_mut(&asset).expect(&format!(
                     "asset {:?} not available in the vault {:?}",
+                vault_resources.get_mut(&asset).expect(&format!(
                     asset, vault_key
                 ))
             };
@@ -112,29 +112,29 @@ mod maya_router {
             let asset = bucket.resource_address();
 
             let (vault_exists, asset_exists) = match self.vaults.get(&vault_key) {
-                Some(asset_vault_kv_store) => (true, asset_vault_kv_store.get(&asset).is_some()),
+                Some(vault_resources) => (true, vault_resources.get(&asset).is_some()),
                 None => (false, false),
             };
 
             if vault_exists {
-                let mut asset_vault_kv_store = self
+                let mut vault_resources = self
                     .vaults
                     .get_mut(&vault_key)
                     .expect("vault should be present");
 
                 if asset_exists {
-                    let mut vault = asset_vault_kv_store
+                    let mut vault = vault_resources
                         .get_mut(&asset)
                         .expect("asset should be present");
                     vault.put(bucket);
                 } else {
-                    asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
+                    vault_resources.insert(asset, FungibleVault::with_bucket(bucket));
                 }
             } else {
-                let asset_vault_kv_store = KeyValueStore::new_with_registered_type();
-                asset_vault_kv_store.insert(asset, FungibleVault::with_bucket(bucket));
+                let vault_resources = KeyValueStore::new_with_registered_type();
+                vault_resources.insert(asset, FungibleVault::with_bucket(bucket));
 
-                self.vaults.insert(vault_key, asset_vault_kv_store);
+                self.vaults.insert(vault_key, vault_resources);
             };
         }
 
