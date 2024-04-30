@@ -58,6 +58,10 @@ mod maya_router {
             amount: Option<Decimal>,
             fee_to_lock: Decimal,
         ) -> FungibleBucket {
+            if fee_to_lock.is_negative() {
+                Runtime::panic(format!("Negative fee to lock {:?} provided", fee_to_lock));
+            }
+
             let mut vault_resources = match self.vaults.get_mut(&vault_key) {
                 Some(vault_resources) => vault_resources,
                 None => Runtime::panic(format!(
