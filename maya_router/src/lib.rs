@@ -6,7 +6,7 @@ use scrypto::prelude::*;
 #[events(
     MayaRouterDepositEvent,
     MayaRouterTransferOutEvent,
-    MayaRouterTransferVaultEvent
+    MayaRouterMigrateEvent
 )]
 mod maya_router {
     enable_method_auth! {
@@ -60,19 +60,22 @@ mod maya_router {
         ) -> FungibleBucket {
             let mut asset_vault_kv_store = match self.vaults.get_mut(&vault_key) {
                 Some(asset_vault_kv_store) => asset_vault_kv_store,
-                None => Runtime::panic(format!("vault {:?} not available", vault_key)),
+                None => Runtime::panic(format!(
+                    "No resource has been deposited to vault {:?}",
+                    vault_key
+                )),
             };
 
             let mut vault = if asset == XRD {
                 let mut vault = asset_vault_kv_store
                     .get_mut(&XRD)
                     .expect("asset XRD not available in the vault");
-                if fee_to_lock > 0.into() {
+                if fee_to_lock.is_positive() {
                     vault.lock_fee(fee_to_lock);
                 }
                 vault
             } else {
-                if fee_to_lock > 0.into() {
+                if fee_to_lock.is_positive() {
                     asset_vault_kv_store
                         .get_mut(&XRD)
                         .expect("asset XRD not available in the vault")
@@ -217,7 +220,7 @@ mod maya_router {
             self.vault_put(to_vault_key, bucket);
 
             // Send transfer out event to notify Bifrost Observer
-            Runtime::emit_event(MayaRouterTransferVaultEvent {
+            Runtime::emit_event(MayaRouterMigrateEvent {
                 from_vault_key,
                 to_vault_key,
                 asset,
@@ -247,7 +250,7 @@ pub struct MayaRouterTransferOutEvent {
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
-pub struct MayaRouterTransferVaultEvent {
+pub struct MayaRouterMigrateEvent {
     pub from_vault_key: PublicKey, // Public key of the Vault, which sends assets
     pub to_vault_key: PublicKey,   // Public key of the Vault, which receives assets
     pub asset: ResourceAddress,    // Resource address of the transferred assets

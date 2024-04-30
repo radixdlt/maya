@@ -1,6 +1,4 @@
-use maya_router::{
-    MayaRouterDepositEvent, MayaRouterTransferOutEvent, MayaRouterTransferVaultEvent,
-};
+use maya_router::{MayaRouterDepositEvent, MayaRouterMigrateEvent, MayaRouterTransferOutEvent};
 use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
@@ -497,7 +495,7 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
         if fee_to_lock.is_zero() {
             receipt.expect_specific_failure(|e| match e {
                 RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                    s.contains("vault") && s.contains("not available")
+                    s.contains("No resource has been deposited to vault")
                 }
                 _ => false,
             });
@@ -505,7 +503,7 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
             receipt.expect_specific_rejection(|e| match e {
                 RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
                     RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)),
-                ) => s.contains("vault") && s.contains("not available"),
+                ) => s.contains("No resource has been deposited to vault"),
                 _ => false,
             });
         }
@@ -684,15 +682,15 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         .find(|(type_identifier, _)| {
             type_identifier.eq(&EventTypeIdentifier(
                 Emitter::Method(maya_router.component_address.into_node_id(), ModuleId::Main),
-                "MayaRouterTransferVaultEvent".to_string(),
+                "MayaRouterMigrateEvent".to_string(),
             ))
         })
         .map(|(_, data)| data)
-        .expect("MayaRouterTransferVaultEvent not found");
+        .expect("MayaRouterMigrateEventnot found");
 
     assert_eq!(
-        scrypto_decode::<MayaRouterTransferVaultEvent>(&event_data).unwrap(),
-        MayaRouterTransferVaultEvent {
+        scrypto_decode::<MayaRouterMigrateEvent>(&event_data).unwrap(),
+        MayaRouterMigrateEvent {
             from_vault_key: maya_router.asgard_vault_1.public_key,
             to_vault_key: maya_router.asgard_vault_2.public_key,
             asset: XRD,
