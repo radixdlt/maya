@@ -232,6 +232,20 @@ mod maya_router {
                 memo,
             });
         }
+
+        pub fn get_vault_balance(&self, vault_key: PublicKey, resource_address: ResourceAddress) -> Decimal {
+            let asset_vault_kv_store = match self.vaults.get(&vault_key) {
+                Some(asset_vault_kv_store) => asset_vault_kv_store,
+                None => return Decimal::zero(),
+            };
+      
+            let res = match asset_vault_kv_store.get(&resource_address) {
+                Some(vault) => vault.amount(),
+                None => Decimal::zero()
+            };
+            
+            res
+        }
     }
 }
 
