@@ -14,6 +14,7 @@ mod maya_router {
             deposit => PUBLIC;
             transfer_out => PUBLIC;
             transfer_between_vaults => PUBLIC;
+            get_vault_balance => PUBLIC;
         }
     }
 
