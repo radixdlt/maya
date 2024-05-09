@@ -1,4 +1,4 @@
-use maya_router::{MayaRouterDepositEvent, MayaRouterMigrateEvent, MayaRouterTransferOutEvent};
+use maya_router::{MayaRouterDepositEvent, MayaRouterTransferOutEvent};
 use radix_engine::system::system_type_checker::TypeCheckError;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
@@ -253,7 +253,7 @@ fn maya_router_deposit_and_transfer_out_success() {
         MayaRouterDepositEvent {
             sender: maya_router.swapper.address,
             vault_key: maya_router.asgard_vault_1.public_key,
-            asset: XRD,
+            resource_address: XRD,
             amount: dec!(1000),
             memo: swap_memo.to_string(),
         }
@@ -301,7 +301,7 @@ fn maya_router_deposit_and_transfer_out_success() {
             MayaRouterTransferOutEvent {
                 vault_key: maya_router.asgard_vault_1.public_key,
                 receiver: maya_router.swapper.address,
-                asset: XRD,
+                resource_address: XRD,
                 amount: dec!(100),
                 memo: tx_out_memo.to_string(),
             }
@@ -734,11 +734,13 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         .expect("MayaRouterMigrateEventnot found");
 
     assert_eq!(
-        scrypto_decode::<MayaRouterMigrateEvent>(&event_data).unwrap(),
-        MayaRouterMigrateEvent {
-            from_vault_key: maya_router.asgard_vault_1.public_key,
-            to_vault_key: maya_router.asgard_vault_2.public_key,
-            asset: XRD,
+        scrypto_decode::<MayaRouterTransferOutEvent>(&event_data).unwrap(),
+        MayaRouterTransferOutEvent {
+            vault_key: maya_router.asgard_vault_1.public_key,
+            receiver: ComponentAddress::virtual_account_from_public_key(
+                &maya_router.asgard_vault_2.public_key
+            ),
+            resource_address: XRD,
             amount: dec!(1000),
             memo: tx_out_memo.to_string(),
         }
