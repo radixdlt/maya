@@ -9,6 +9,7 @@ scrypto = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db
 
 [dev-dependencies]
 scrypto-test = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
+scrypto-compiler = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
 radix-engine = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = { version = "0.26.2" }
