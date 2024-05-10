@@ -1,5 +1,6 @@
 use maya_router::{MayaRouterDepositEvent, MayaRouterWithdrawEvent};
 use radix_engine::system::system_type_checker::TypeCheckError;
+use scrypto_compiler::ScryptoCompiler;
 use scrypto_test::prelude::LedgerSimulatorBuilder;
 use scrypto_test::prelude::*;
 use strum::IntoEnumIterator;
@@ -59,7 +60,14 @@ impl MayaRouterSimulator {
     }
 
     pub fn create_component(ledger: &mut DefaultLedgerSimulator) -> TransactionReceipt {
-        let package_address = ledger.compile_and_publish(this_package!());
+        let mut compiler = ScryptoCompiler::builder()
+            .manifest_path(this_package!())
+            .build()
+            .unwrap();
+        let artifacts = compiler.compile().unwrap().remove(0);
+
+        let package_address = ledger
+            .publish_package_simple((artifacts.wasm.content, artifacts.package_definition.content));
         ledger.execute_manifest(
             Self::manifest_builder_with_faucet_fee()
                 .call_function(
@@ -198,6 +206,10 @@ impl MayaRouterSimulator {
                     fee_to_lock
                 ),
             )
+            .take_all_from_worktop(XRD, "xrd")
+            .call_method_with_name_lookup(self.component_address, "transfer", |lookup| {
+                (to, lookup.bucket("xrd"))
+            })
             .build();
         self.ledger.execute_manifest(manifest, vec![badge])
     }

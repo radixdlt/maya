@@ -18,16 +18,17 @@ mod maya_router {
         }
     }
 
-    // The MayaRouter component is responsible for managing access to the funds controlled
-    // by Maya vaults (e.g. Asgard).
-    // We use the term "vault_address" to refer to Maya vaults (e.g. Asgard) - specifically,
-    // to their derived virtual account addresses.
-    // Not to be confused with Scrypto's vaults (e.g. FungibleVault).
+    /// A MayaRouter component is responsible for storing the funds owned by Maya Protocol
+    /// and accepting user deposits.
+    ///
+    /// We use term `vault_key` to refer to the public key of a Maya Vault and `vault_address`
+    /// for the corresponding virtual account addresses.
+    ///
+    /// This is not to be confused with Scrypto vaults (e.g. FungibleVault).
     struct MayaRouter {
         locker: Global<AccountLocker>,
-        // This KV store holds all the funds.
-        // Each "Maya vault" (identified by its corresponding virutal account address) owns a collection of
-        // Scrypto `FungibleVault`s (one for each owned resource).
+        /// This KV store that holds all the funds.
+        /// Every Maya vault owns a collection of Scrypto vaults, one per resource type.
         vaults: KeyValueStore<ComponentAddress, KeyValueStore<ResourceAddress, FungibleVault>>,
     }
 
@@ -57,8 +58,8 @@ mod maya_router {
             .globalize()
         }
 
-        // Take some amount of resource from the vault corresponding to the given `vault_address`.
-        // Optionally also lock an XRD fee.
+        /// Takes some amount of resource from the vault corresponding to the given `vault_address`.
+        /// Optionally also locks an XRD fee.
         fn vault_take(
             &mut self,
             vault_address: ComponentAddress,
@@ -111,8 +112,9 @@ mod maya_router {
             }
         }
 
-        // Put a bucket of resource into the vault corresponding to the given `vault_address`.
-        // Creates the vault if it doesn't exist.
+        /// Puts a bucket of resource into the vault corresponding to the given `vault_address`.
+        ///
+        /// Creates the vault if it doesn't exist.
         fn vault_put(&mut self, vault_address: ComponentAddress, bucket: FungibleBucket) {
             let resource_address = bucket.resource_address();
 
@@ -143,9 +145,11 @@ mod maya_router {
             };
         }
 
-        // Deposit a bucket of resources to the vault corresponding to the given `vault_address`.
-        // It is required that the provided `sender` account is one of the signers of the transaction.
-        // `memo` is opaque to this component and will be forwarded to the Maya network.
+        /// Deposit a bucket of resources to the vault corresponding to the given `vault_address`.
+        ///
+        /// It is required that the provided `sender` account is one of the signers of the transaction.
+        ///
+        /// `memo` is opaque to this component and will be forwarded to the Maya network.
         pub fn user_deposit(
             &mut self,
             sender: Global<Account>,
@@ -169,13 +173,16 @@ mod maya_router {
             });
         }
 
-        // Withdraws a specified `amount` of resource from the vault corresponding to the given `vault_address`
-        // and returns it to the caller.
-        // It's up to the caller to perform an actual transfer of the funds to the end recipient.
-        // `intended_recipient` parameter is passed as-is to the emmitted event, without any further verification.
-        // A badge corresponding to the `vault_address` must be present (or, in other words, the transaction
-        // must be signed by a corresponding private key).
-        // This methods allows to optionally lock a fee from the XRD vault owned by `vault_address`.
+        /// Withdraws a specified `amount` of resource from the vault corresponding to the given `vault_address`
+        /// and returns it to the caller.
+        ///
+        /// It's up to the caller to perform an actual transfer of the funds to the end recipient.
+        /// `intended_recipient` parameter is passed as-is to the emitted event, without any further verification.
+        ///
+        /// A badge corresponding to the `vault_address` must be present (or, in other words, the transaction
+        /// must be signed by a corresponding private key).
+        ///
+        /// This methods allows to optionally lock a fee from the XRD vault owned by `vault_address`.
         pub fn withdraw(
             &mut self,
             vault_address: Global<Account>,
@@ -207,27 +214,23 @@ mod maya_router {
             bucket
         }
 
-        // Transfers the funds from `bucket` to `recipient` using this component's account locker.
+        /// Transfers the funds from `bucket` to `recipient` using this component's account locker.
         pub fn transfer(&mut self, recipient: Global<Account>, bucket: FungibleBucket) {
             self.locker.store(recipient, bucket.into(), true);
         }
 
-        // Directly deposits the funds from `bucket` to the vault identified by `to_vault_address`.
-        pub fn direct_deposit(
-            &mut self,
-            to_vault_address: Global<Account>,
-            bucket: FungibleBucket,
-        ) {
+        /// Directly deposits the funds from `bucket` to the vault identified by `vault_address`.
+        pub fn direct_deposit(&mut self, vault_address: Global<Account>, bucket: FungibleBucket) {
             Runtime::emit_event(MayaRouterDirectDepositEvent {
-                vault_address: to_vault_address.address(),
+                vault_address: vault_address.address(),
                 resource_address: bucket.resource_address(),
                 amount: bucket.amount(),
             });
 
-            self.vault_put(to_vault_address.address(), bucket);
+            self.vault_put(vault_address.address(), bucket);
         }
 
-        // Returns a balance of the specified resource owned by a Maya vault corresponding to the given `vault_address`.
+        /// Returns the balance of the specified resource owned by a Maya vault corresponding to the given `vault_address`.
         pub fn get_vault_balance(
             &self,
             vault_address: Global<Account>,
@@ -248,9 +251,9 @@ mod maya_router {
     }
 }
 
-// An event indicating that the specified `amount` of resource (identified by `resource_address`) was deposited
-// to a Maya vault (e.g. Asgard) identified by `vault_address`.
-// The `memo` (opaque to this component) specifies a Maya-specific intent that was provided by the caller.
+/// An event indicating that the specified `amount` of resource (identified by `resource_address`) was deposited
+/// to a Maya vault (e.g. Asgard) identified by `vault_address`.
+/// The `memo` (opaque to this component) specifies a Maya-specific intent that was provided by the caller.
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterDepositEvent {
     pub sender: ComponentAddress,
@@ -260,10 +263,10 @@ pub struct MayaRouterDepositEvent {
     pub memo: String,
 }
 
-// An event indicating that the specified `amount` of resource (identified by `resource_address`) was withdrawn
-// from a Maya vault (e.g. Asgard) identified by `vault_address` with the intention of being subsequently transferred to `intended_recipient`.
-// The recipient can also be an address corresponding to another Maya vault key (in case of vault->vault transfers, or "migration").
-// The `memo` (opaque to this component) specifies a Maya-specific intent that was provided by the caller.
+/// An event indicating that the specified `amount` of resource (identified by `resource_address`) was withdrawn
+/// from a Maya vault (e.g. Asgard) identified by `vault_address` with the intention of being subsequently transferred to `intended_recipient`.
+/// The recipient can also be an address corresponding to another Maya vault key (in case of vault->vault transfers, or "migration").
+/// The `memo` (opaque to this component) specifies a Maya-specific intent that was provided by the caller.
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterWithdrawEvent {
     pub vault_address: ComponentAddress,
@@ -274,8 +277,8 @@ pub struct MayaRouterWithdrawEvent {
     pub aggregator: Option<AggregatorInfo>,
 }
 
-// An event indicating a direct deposit to `vault_address`.
-// Emitted during churn/migrate alongside MayaRouterDepositEvent.
+/// An event indicating a direct deposit to `vault_address`.
+/// Emitted during churn/migrate alongside MayaRouterDepositEvent.
 #[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
 pub struct MayaRouterDirectDepositEvent {
     pub vault_address: ComponentAddress,
