@@ -149,7 +149,7 @@ mod maya_router {
         pub fn user_deposit(
             &mut self,
             sender: Global<Account>,
-            vault_address: ComponentAddress,
+            vault_address: Global<Account>,
             bucket: FungibleBucket,
             memo: String,
         ) {
@@ -158,11 +158,11 @@ mod maya_router {
             let amount = bucket.amount();
             let resource_address = bucket.resource_address();
 
-            self.vault_put(vault_address, bucket);
+            self.vault_put(vault_address.address(), bucket);
 
             Runtime::emit_event(MayaRouterDepositEvent {
                 sender: sender.address(),
-                vault_address: vault_address,
+                vault_address: vault_address.address(),
                 resource_address,
                 amount,
                 memo,
@@ -215,25 +215,25 @@ mod maya_router {
         // Directly deposits the funds from `bucket` to the vault identified by `to_vault_address`.
         pub fn direct_deposit(
             &mut self,
-            to_vault_address: ComponentAddress,
+            to_vault_address: Global<Account>,
             bucket: FungibleBucket,
         ) {
             Runtime::emit_event(MayaRouterDirectDepositEvent {
-                vault_address: to_vault_address,
+                vault_address: to_vault_address.address(),
                 resource_address: bucket.resource_address(),
                 amount: bucket.amount(),
             });
 
-            self.vault_put(to_vault_address, bucket);
+            self.vault_put(to_vault_address.address(), bucket);
         }
 
         // Returns a balance of the specified resource owned by a Maya vault corresponding to the given `vault_address`.
         pub fn get_vault_balance(
             &self,
-            vault_address: ComponentAddress,
+            vault_address: Global<Account>,
             resource_address: ResourceAddress,
         ) -> Decimal {
-            let vault_kv_store = match self.vaults.get(&vault_address) {
+            let vault_kv_store = match self.vaults.get(&vault_address.address()) {
                 Some(vault_kv_store) => vault_kv_store,
                 None => return Decimal::zero(),
             };
