@@ -178,7 +178,7 @@ mod maya_router {
         // This methods allows to optionally lock a fee from the XRD vault owned by `vault_address`.
         pub fn withdraw(
             &mut self,
-            vault_address: Global<Account>,
+            vault_address: Global<AnyComponent>,
             resource_address: ResourceAddress,
             intended_recipient: ComponentAddress,
             aggregator: Option<AggregatorInfo>,
