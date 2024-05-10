@@ -144,11 +144,11 @@ mod maya_router {
         }
 
         // Deposit a bucket of resources to the vault corresponding to the given `vault_address`.
-        // It is required that the provided `sender` account is one of the signers of the transaction.
+        // It is required that the provided `sender` account authorized this deposit call (e.g. by signing the transaction, in case of account addresses).
         // `memo` is opaque to this component and will be forwarded to the Maya network.
         pub fn user_deposit(
             &mut self,
-            sender: Global<Account>,
+            sender: Global<AnyComponent>,
             vault_address: ComponentAddress,
             bucket: FungibleBucket,
             memo: String,
