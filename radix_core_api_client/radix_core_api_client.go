@@ -7,12 +7,12 @@ import (
 	i25911dc319edd61cbac496af7eab5ef20b6069a42515e22ec6a9bc97bf598488 "github.com/microsoft/kiota-serialization-json-go"
 	i56887720f41ac882814261620b1c8459c4a992a0207af547c4453dd39fabc426 "github.com/microsoft/kiota-serialization-multipart-go"
 	i7294a22093d408fdca300f11b81a887d89c47b764af06c8b803e2323973fdb83 "github.com/microsoft/kiota-serialization-text-go"
-	id97d97a0f61eb7aba03f6dfe0b81d915dc4592e0ad0b2b0a35f86898fa3a1281 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/lts"
-	i8960c5fe7653f0efc6e7f2bc06a2ec6d1c2357a8f02decb6e4cbe18f9e0eaf52 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/mempool"
-	i78093a4e4a0b144ec97604aab95c3df07bd4e66fb0282f14b7e3b2b4674004d4 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/state"
-	iea54b86da45c623cf5fd94330c1536d128bebca6af259285a97e377b603dd494 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/status"
-	i8f4072d456c1d74b5adfef98d8684acded835b6cb52e24c169a318cb684aeb45 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/stream"
-	i59c61699e638c094c5d0fa5d1bedbe6d028f8ca21aa088bd92877c88d3693cb5 "gitlab.com/mayachain/mayanode/bifrost/pkg/chainclients/radix/coreapi/client/transaction"
+	id97d97a0f61eb7aba03f6dfe0b81d915dc4592e0ad0b2b0a35f86898fa3a1281 "github.com/radixdlt/maya/radix_core_api_client/lts"
+	i8960c5fe7653f0efc6e7f2bc06a2ec6d1c2357a8f02decb6e4cbe18f9e0eaf52 "github.com/radixdlt/maya/radix_core_api_client/mempool"
+	i78093a4e4a0b144ec97604aab95c3df07bd4e66fb0282f14b7e3b2b4674004d4 "github.com/radixdlt/maya/radix_core_api_client/state"
+	iea54b86da45c623cf5fd94330c1536d128bebca6af259285a97e377b603dd494 "github.com/radixdlt/maya/radix_core_api_client/status"
+	i8f4072d456c1d74b5adfef98d8684acded835b6cb52e24c169a318cb684aeb45 "github.com/radixdlt/maya/radix_core_api_client/stream"
+	i59c61699e638c094c5d0fa5d1bedbe6d028f8ca21aa088bd92877c88d3693cb5 "github.com/radixdlt/maya/radix_core_api_client/transaction"
 )
 
 // RadixCoreApiClient the main entry point of the SDK, exposes the configuration and the fluent API.
