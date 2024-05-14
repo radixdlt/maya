@@ -1,0 +1,75 @@
+package models
+
+import (
+	i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91 "github.com/microsoft/kiota-abstractions-go/serialization"
+)
+
+type PackageFieldRoyaltyAccumulatorSubstate struct {
+	Substate
+	// The value property
+	value PackageFieldRoyaltyAccumulatorValueable
+}
+
+// NewPackageFieldRoyaltyAccumulatorSubstate instantiates a new PackageFieldRoyaltyAccumulatorSubstate and sets the default values.
+func NewPackageFieldRoyaltyAccumulatorSubstate() *PackageFieldRoyaltyAccumulatorSubstate {
+	m := &PackageFieldRoyaltyAccumulatorSubstate{
+		Substate: *NewSubstate(),
+	}
+	return m
+}
+
+// CreatePackageFieldRoyaltyAccumulatorSubstateFromDiscriminatorValue creates a new instance of the appropriate class based on discriminator value
+// returns a Parsable when successful
+func CreatePackageFieldRoyaltyAccumulatorSubstateFromDiscriminatorValue(parseNode i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) (i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable, error) {
+	return NewPackageFieldRoyaltyAccumulatorSubstate(), nil
+}
+
+// GetFieldDeserializers the deserialization information for the current model
+// returns a map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error) when successful
+func (m *PackageFieldRoyaltyAccumulatorSubstate) GetFieldDeserializers() map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+	res := m.Substate.GetFieldDeserializers()
+	res["value"] = func(n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+		val, err := n.GetObjectValue(CreatePackageFieldRoyaltyAccumulatorValueFromDiscriminatorValue)
+		if err != nil {
+			return err
+		}
+		if val != nil {
+			m.SetValue(val.(PackageFieldRoyaltyAccumulatorValueable))
+		}
+		return nil
+	}
+	return res
+}
+
+// GetValue gets the value property value. The value property
+// returns a PackageFieldRoyaltyAccumulatorValueable when successful
+func (m *PackageFieldRoyaltyAccumulatorSubstate) GetValue() PackageFieldRoyaltyAccumulatorValueable {
+	return m.value
+}
+
+// Serialize serializes information the current object
+func (m *PackageFieldRoyaltyAccumulatorSubstate) Serialize(writer i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.SerializationWriter) error {
+	err := m.Substate.Serialize(writer)
+	if err != nil {
+		return err
+	}
+	{
+		err = writer.WriteObjectValue("value", m.GetValue())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetValue sets the value property value. The value property
+func (m *PackageFieldRoyaltyAccumulatorSubstate) SetValue(value PackageFieldRoyaltyAccumulatorValueable) {
+	m.value = value
+}
+
+type PackageFieldRoyaltyAccumulatorSubstateable interface {
+	i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
+	Substateable
+	GetValue() PackageFieldRoyaltyAccumulatorValueable
+	SetValue(value PackageFieldRoyaltyAccumulatorValueable)
+}
