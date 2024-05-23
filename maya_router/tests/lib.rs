@@ -40,6 +40,29 @@ impl Account {
             badge,
         }
     }
+
+    fn new_not_initialized(ledger: &mut DefaultLedgerSimulator, key_type: KeyType) -> Self {
+        let account: (PublicKey, PrivateKey) = match key_type {
+            KeyType::Ed25519 => {
+                let (public_key, private_key) = ledger.new_ed25519_key_pair();
+                (public_key.into(), private_key.into())
+            }
+            KeyType::Secp256k1 => {
+                let (public_key, private_key) = ledger.new_key_pair();
+                (public_key.into(), private_key.into())
+            }
+        };
+        let address = ComponentAddress::virtual_account_from_public_key(&account.0.clone());
+
+        let badge = NonFungibleGlobalId::from_public_key(&account.0);
+
+        Account {
+            _public_key: account.0,
+            _private_key: account.1,
+            address,
+            badge,
+        }
+    }
 }
 
 struct MayaRouterSimulator {
@@ -82,8 +105,11 @@ impl MayaRouterSimulator {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
         let owner = Account::new(&mut ledger, KeyType::Ed25519);
-        let asgard_vault_1 = Account::new(&mut ledger, KeyType::Secp256k1);
-        let asgard_vault_2 = Account::new(&mut ledger, KeyType::Ed25519);
+
+        // We are using not initialized accounts. They will be initialized once someone
+        // will deposit some resources to them.
+        let asgard_vault_1 = Account::new_not_initialized(&mut ledger, KeyType::Secp256k1);
+        let asgard_vault_2 = Account::new_not_initialized(&mut ledger, KeyType::Ed25519);
         let swapper = Account::new(&mut ledger, KeyType::Secp256k1);
 
         let mut resources = indexmap!();
@@ -554,7 +580,7 @@ fn maya_router_transfer_out_asset_not_available() {
 }
 
 #[test]
-fn maya_router_transfer_out_asgard_vault_not_available() {
+fn maya_router_transfer_out_assert_access_rule_failed_insufficient_balance() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -576,9 +602,16 @@ fn maya_router_transfer_out_asgard_vault_not_available() {
 
     // Assert
     receipt.expect_specific_rejection(|e| match e {
-        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(RuntimeError::ApplicationError(
-            ApplicationError::PanicMessage(s),
-        )) => s.contains("No resource has been deposited to vault"),
+        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(RuntimeError::SystemError(
+            SystemError::TypeCheckError(TypeCheckError::BlueprintPayloadValidationError(
+                _,
+                BlueprintPayloadIdentifier::Function(func_name, _),
+                s,
+            )),
+        )) => {
+            func_name.eq("assert_access_rule")
+                && s.contains("SystemModuleError(CostingError(FeeReserveError(InsufficientBalance")
+        }
         _ => false,
     });
 }
