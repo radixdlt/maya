@@ -580,7 +580,7 @@ fn maya_router_transfer_out_asset_not_available() {
 }
 
 #[test]
-fn maya_router_transfer_out_assert_access_rule_failed_insufficient_balance() {
+fn maya_router_transfer_out_insufficient_balance() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
@@ -602,16 +602,11 @@ fn maya_router_transfer_out_assert_access_rule_failed_insufficient_balance() {
 
     // Assert
     receipt.expect_specific_rejection(|e| match e {
-        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(RuntimeError::SystemError(
-            SystemError::TypeCheckError(TypeCheckError::BlueprintPayloadValidationError(
-                _,
-                BlueprintPayloadIdentifier::Function(func_name, _),
-                s,
+        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+            RuntimeError::SystemModuleError(SystemModuleError::CostingError(
+                CostingError::FeeReserveError(FeeReserveError::InsufficientBalance { .. }),
             )),
-        )) => {
-            func_name.eq("assert_access_rule")
-                && s.contains("SystemModuleError(CostingError(FeeReserveError(InsufficientBalance")
-        }
+        ) => true,
         _ => false,
     });
 }
