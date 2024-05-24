@@ -55,10 +55,6 @@ struct MayaRouterSimulator {
 impl MayaRouterSimulator {
     const BLUEPRINT_NAME: &'static str = "MayaRouter";
 
-    pub fn manifest_builder_with_faucet_fee() -> ManifestBuilder {
-        ManifestBuilder::new().lock_fee_from_faucet()
-    }
-
     pub fn create_component(ledger: &mut DefaultLedgerSimulator) -> TransactionReceipt {
         let mut compiler = ScryptoCompiler::builder()
             .manifest_path(this_package!())
@@ -69,7 +65,8 @@ impl MayaRouterSimulator {
         let package_address = ledger
             .publish_package_simple((artifacts.wasm.content, artifacts.package_definition.content));
         ledger.execute_manifest(
-            Self::manifest_builder_with_faucet_fee()
+            ManifestBuilder::new()
+                .lock_fee_from_faucet()
                 .call_function(
                     package_address,
                     Self::BLUEPRINT_NAME,
@@ -129,7 +126,8 @@ impl MayaRouterSimulator {
     pub fn set_only_swapper_can_deposit(&mut self) {
         let badge = ResourceOrNonFungible::NonFungible(self.swapper.badge.clone());
         self.ledger.execute_manifest(
-            Self::manifest_builder_with_faucet_fee()
+            ManifestBuilder::new()
+                .lock_fee_from_faucet()
                 .call_method(
                     self.swapper.address,
                     ACCOUNT_SET_DEFAULT_DEPOSIT_RULE_IDENT,
@@ -163,7 +161,8 @@ impl MayaRouterSimulator {
         amount: Decimal,
         memo: &str,
     ) -> TransactionReceipt {
-        let manifest = Self::manifest_builder_with_faucet_fee()
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
             .withdraw_from_account(from, asset, amount)
             .take_all_from_worktop(asset, "bucket")
             .with_bucket("bucket", |builder, bucket| {
@@ -187,12 +186,8 @@ impl MayaRouterSimulator {
         memo: &str,
         fee_to_lock: Decimal,
     ) -> TransactionReceipt {
-        let builder = if fee_to_lock <= 0.into() {
-            Self::manifest_builder_with_faucet_fee()
-        } else {
-            ManifestBuilder::new()
-        };
-        let manifest = builder
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
             .call_method(
                 self.component_address,
                 "withdraw",
@@ -224,7 +219,8 @@ impl MayaRouterSimulator {
         memo: &str,
         fee_to_lock: Decimal,
     ) -> TransactionReceipt {
-        let manifest = Self::manifest_builder_with_faucet_fee()
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
             .call_method(
                 self.component_address,
                 "withdraw",
@@ -351,7 +347,8 @@ fn maya_router_deposit_and_transfer_out_success() {
             TransferOut::LockerUsed => {
                 let locker = maya_router.get_account_locker().unwrap();
 
-                let manifest = MayaRouterSimulator::manifest_builder_with_faucet_fee()
+                let manifest = ManifestBuilder::new()
+                    .lock_fee_from_faucet()
                     .call_method(
                         locker,
                         "claim",
@@ -384,7 +381,8 @@ fn maya_router_deposit_sender_non_real_account() {
     let swap_memo = "SWAP:MAYA.CACAO";
 
     // Act
-    let manifest = MayaRouterSimulator::manifest_builder_with_faucet_fee()
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
         .withdraw_from_account(maya_router.swapper.address, XRD, dec!(100))
         .take_all_from_worktop(XRD, "bucket")
         .with_bucket("bucket", |builder, bucket| {
