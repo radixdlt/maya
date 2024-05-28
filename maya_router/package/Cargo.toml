@@ -1,0 +1,22 @@
+[package]
+name = "maya_router"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+sbor = { workspace = true }
+scrypto = { workspace = true }
+
+[dev-dependencies]
+scrypto-test = { workspace = true }
+scrypto-compiler = { workspace = true }
+radix-engine = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[features]
+default = []
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
