@@ -15,6 +15,9 @@ scrypto = { version = "1.2.0" }
 scrypto-test = { version = "1.2.0" }
 scrypto-compiler = { version = "1.2.0" }
 radix-engine = { version = "1.2.0" }
+radix-common = { version = "1.2.0" }
+radix-engine-interface = { version = "1.2.0" }
+radix-transactions = { version = "1.2.0" }
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = { version = "0.26.2" }
 

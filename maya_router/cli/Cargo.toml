@@ -1,0 +1,31 @@
+[package]
+name = "maya_router_cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+radix-engine = { workspace = true }
+radix-transactions = { workspace = true }
+radix-common = { workspace = true }
+radix-engine-interface = { workspace = true }
+sbor = { workspace = true }
+sbor-json = { git = "https://github.com/radixdlt/radix-engine-toolkit", rev = "d327d250bb9fb226027cb192bd32967fe7468c2a" }
+gateway-client = { path = "/Users/lukaszrubaszewski/work/radixdlt/ignition/libraries/gateway-client" }
+
+clap = { version = "4.5.4", features = ["derive"] }
+log = { version = "0.4.21" }
+env_logger = { version = "0.11.3" }
+itertools = { version = "0.13.0" }
+rand = { version = "0.8.5" }
+serde_json = { version = "1.0.114" }
+hex = { version = "0.4.3" }
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "maya_router_cli"
+path = "src/cli/bin.rs"
+
