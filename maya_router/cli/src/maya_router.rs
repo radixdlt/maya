@@ -88,6 +88,26 @@ pub struct MayaRouterTester {
     pub resources: IndexMap<String, ResourceAddress>,
 }
 
+impl Display for MayaRouterTester {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let address_bech32_encoder =
+            AddressBech32Encoder::new(&self.gateway_network_connector.network_definition);
+        write!(
+            f,
+            "Component Address: {}
+Owner Address: {}
+Asgard Vault #1 Address: {}
+Asgard Vault #2 Address: {}",
+            self.component_address
+                .unwrap()
+                .display(&address_bech32_encoder),
+            self.owner.address.display(&address_bech32_encoder),
+            self.asgard_vault_1.address.display(&address_bech32_encoder),
+            self.asgard_vault_2.address.display(&address_bech32_encoder),
+        )
+    }
+}
+
 impl MayaRouterTester {
     pub fn new(network: &str, owner_private_key: Option<&str>) -> Self {
         let private_key = match owner_private_key {
@@ -394,6 +414,9 @@ fn maya_router_deposit_and_withdraw_success() {
         ComponentAddress::try_from_bech32(&address_bech32_decoder, component_address).unwrap();
 
     maya_router.set_component_address(component_address);
+
+    println!("MayaRouter info:\n{}", maya_router);
+
     maya_router.deposit(
         maya_router.asgard_vault_1.address,
         maya_router.swapper.clone(),
