@@ -41,7 +41,7 @@ impl CreateAccount {
 
         if !self.unitialized {
             log::info!("Initializing account");
-            let private_key = clone_private_key(&private_key);
+            let private_key = clone_private_key_ed25519(&private_key);
             let manifest = ManifestBuilder::new()
                 .lock_fee(FAUCET, dec!(100))
                 .get_free_xrd_from_faucet()

@@ -2,14 +2,10 @@ use crate::*;
 use clap::Parser;
 use maya_router_cli::manifest_execute::execute;
 use maya_router_cli::network_selector::NetworkConfig;
-use maya_router_cli::utils::clone_private_key;
+use maya_router_cli::utils::*;
 use radix_common::prelude::*;
-use radix_engine_interface::blueprints::package::PackageDefinition;
-use radix_engine_interface::object_modules::metadata::MetadataInit;
 use radix_engine_interface::prelude::*;
 use radix_transactions::prelude::*;
-use scrypto_test::ledger_simulator::CompileProfile;
-use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 pub struct Publish {
@@ -57,7 +53,7 @@ impl Publish {
         log::info!("Publishing package");
         let result = execute(
             network.clone(),
-            clone_private_key(&owner_private_key).into(),
+            clone_private_key_ed25519(&owner_private_key).into(),
             manifest,
         )?;
 
@@ -106,13 +102,4 @@ impl Publish {
             Ok(())
         }
     }
-}
-
-fn package_get() -> (Vec<u8>, PackageDefinition) {
-    let package_dir = PathBuf::from_str(env!("CARGO_MANIFEST_DIR"))
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("package");
-    scrypto_test::prelude::Compile::compile(package_dir, CompileProfile::Standard)
 }

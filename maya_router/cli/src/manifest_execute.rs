@@ -28,3 +28,16 @@ pub fn execute(
     );
     execution_service.execute_manifest(manifest, false)
 }
+
+pub fn execute_2(
+    network_connector: &mut GatewayNetworkConnector,
+    private_key: PrivateKey,
+    manifest: TransactionManifestV1,
+) -> Result<ExecutionReceiptSuccessContents, ExecutionServiceError<GatewayExecutorError>> {
+    let signer_keys = vec![&private_key];
+    let address = ComponentAddress::virtual_account_from_public_key(&private_key.public_key());
+
+    let mut execution_service =
+        ExecutionService::new(network_connector, address, &private_key, &signer_keys);
+    execution_service.execute_manifest(manifest, false)
+}
