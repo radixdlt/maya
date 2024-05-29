@@ -1,4 +1,5 @@
 mod create_account;
+mod deposit_and_withdraw;
 mod publish_and_instantiate;
 
 use clap::Parser;
@@ -15,6 +16,7 @@ fn main() -> Result<(), Error> {
 pub enum Cli {
     PublishAndInstantiate(publish_and_instantiate::PublishAndInstantiate),
     CreateAccount(create_account::CreateAccount),
+    DepositAndWithdraw(deposit_and_withdraw::DepositAndWithdraw),
 }
 
 impl Cli {
@@ -22,6 +24,7 @@ impl Cli {
         match self {
             Self::PublishAndInstantiate(cmd) => cmd.run(out),
             Self::CreateAccount(cmd) => cmd.run(out),
+            Self::DepositAndWithdraw(cmd) => cmd.run(out),
         }
     }
 }

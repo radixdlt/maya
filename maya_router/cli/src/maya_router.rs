@@ -14,10 +14,10 @@ pub enum KeyType {
 }
 
 pub struct AccountData {
-    public_key: PublicKey,
-    private_key: PrivateKey,
-    address: ComponentAddress,
-    badge: NonFungibleGlobalId,
+    pub public_key: PublicKey,
+    pub private_key: PrivateKey,
+    pub address: ComponentAddress,
+    pub badge: NonFungibleGlobalId,
 }
 
 impl Clone for AccountData {
