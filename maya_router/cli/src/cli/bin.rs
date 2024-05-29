@@ -1,5 +1,5 @@
 mod create_account;
-mod publish;
+mod publish_and_instantiate;
 
 use clap::Parser;
 use maya_router_cli::error::*;
@@ -13,14 +13,14 @@ fn main() -> Result<(), Error> {
 
 #[derive(Parser, Debug)]
 pub enum Cli {
-    Publish(publish::Publish),
+    PublishAndInstantiate(publish_and_instantiate::PublishAndInstantiate),
     CreateAccount(create_account::CreateAccount),
 }
 
 impl Cli {
     pub fn run<O: std::io::Write>(self, out: &mut O) -> Result<(), Error> {
         match self {
-            Self::Publish(cmd) => cmd.run(out),
+            Self::PublishAndInstantiate(cmd) => cmd.run(out),
             Self::CreateAccount(cmd) => cmd.run(out),
         }
     }
