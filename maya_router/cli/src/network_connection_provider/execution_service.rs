@@ -65,6 +65,7 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
         // If the manifest is empty (has no instructions) do no work
         if manifest.instructions.is_empty() {
             return Ok(ExecutionReceiptSuccessContents {
+                intent_hash: String::default(),
                 new_entities: Default::default(),
             });
         }
@@ -175,14 +176,24 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
         // did not, then return the success contents.
         match receipt {
             ExecutionReceipt::CommitSuccess(success_contents) => Ok(success_contents),
-            ExecutionReceipt::CommitFailure { reason }
-            | ExecutionReceipt::Rejection { reason }
-            | ExecutionReceipt::Abort { reason } => {
+            ExecutionReceipt::CommitFailure {
+                intent_hash,
+                reason,
+            }
+            | ExecutionReceipt::Rejection {
+                intent_hash,
+                reason,
+            }
+            | ExecutionReceipt::Abort {
+                intent_hash,
+                reason,
+            } => {
                 let decompiled_manifest = decompile(&manifest.instructions, &network_definition)
                     .map_err(ExecutionServiceError::ManifestDecompilationFailed)?;
                 Err(
                     ExecutionServiceError::TransactionExecutionWasNotSuccessful {
                         manifest: decompiled_manifest,
+                        intent_hash,
                         reason,
                     },
                 )
@@ -202,6 +213,10 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
 pub enum ExecutionServiceError<E> {
     ExecutorError(E),
     ManifestDecompilationFailed(DecompileError),
-    TransactionExecutionWasNotSuccessful { manifest: String, reason: String },
+    TransactionExecutionWasNotSuccessful {
+        manifest: String,
+        intent_hash: String,
+        reason: String,
+    },
     TransactionPreviewWasNotSuccessful(TransactionManifestV1, TransactionReceipt),
 }

@@ -170,17 +170,22 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
                     };
 
                     return Ok(ExecutionReceipt::CommitSuccess(
-                        ExecutionReceiptSuccessContents { new_entities },
+                        ExecutionReceiptSuccessContents {
+                            intent_hash: intent_hash_string,
+                            new_entities,
+                        },
                     ));
                 }
                 TransactionIntentStatus::CommittedFailure => {
                     return Ok(ExecutionReceipt::CommitFailure {
+                        intent_hash: intent_hash_string,
                         reason: transaction_status_response.intent_status_description,
                     })
                 }
                 TransactionIntentStatus::PermanentlyRejected
                 | TransactionIntentStatus::LikelyButNotCertainRejection => {
                     return Ok(ExecutionReceipt::Rejection {
+                        intent_hash: intent_hash_string,
                         reason: transaction_status_response.intent_status_description,
                     })
                 }

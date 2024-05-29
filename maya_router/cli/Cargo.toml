@@ -10,6 +10,7 @@ radix-engine = { workspace = true }
 radix-transactions = { workspace = true }
 radix-common = { workspace = true }
 radix-engine-interface = { workspace = true }
+scrypto-test = { workspace = true }
 sbor = { workspace = true }
 sbor-json = { git = "https://github.com/radixdlt/radix-engine-toolkit", rev = "d327d250bb9fb226027cb192bd32967fe7468c2a" }
 gateway-client = { path = "/Users/lukaszrubaszewski/work/radixdlt/ignition/libraries/gateway-client" }

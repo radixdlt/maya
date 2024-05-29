@@ -55,9 +55,9 @@ pub trait NetworkConnectionProvider {
 #[derive(Clone, Debug, PartialEq, Eq, ScryptoSbor)]
 pub enum ExecutionReceipt {
     CommitSuccess(ExecutionReceiptSuccessContents),
-    CommitFailure { reason: String },
-    Rejection { reason: String },
-    Abort { reason: String },
+    CommitFailure { intent_hash: String, reason: String },
+    Rejection { intent_hash: String, reason: String },
+    Abort { intent_hash: String, reason: String },
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, ScryptoSbor)]
@@ -69,5 +69,6 @@ pub struct NewEntities {
 
 #[derive(Clone, Debug, PartialEq, Eq, ScryptoSbor)]
 pub struct ExecutionReceiptSuccessContents {
+    pub intent_hash: String,
     pub new_entities: NewEntities,
 }
