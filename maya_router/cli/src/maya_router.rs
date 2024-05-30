@@ -128,11 +128,11 @@ impl Display for MayaRouterTester {
             f,
             "Component Address: {}
 Owner Address: {}
-Asgard Vault #1
+Default Asgard Vault #1
     Address: {}
     Private Key: {}
     Balance: {} XRD
-Asgard Vault #2
+Default Asgard Vault #2
     Address: {}
     Private Key: {}
     Balance: {} XRD",
