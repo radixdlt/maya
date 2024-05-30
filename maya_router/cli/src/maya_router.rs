@@ -274,11 +274,7 @@ impl MayaRouterTester {
 
     pub fn get_vault_balance(&self, vault: AccountData, asset: ResourceAddress) -> Decimal {
         let manifest = ManifestBuilder::new()
-            .call_method(
-                self.component_address.unwrap(),
-                "lock_fee",
-                manifest_args!(vault.address, dec!(10)),
-            )
+            .lock_fee_from_faucet()
             .call_method(
                 self.component_address.unwrap(),
                 "get_vault_balance",
