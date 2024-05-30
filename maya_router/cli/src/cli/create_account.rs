@@ -19,7 +19,7 @@ pub struct CreateAccount {
     unitialized: bool,
 
     /// Network to Use [Stokenet | Mainnet]
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "stokenet")]
     network: Option<String>,
 }
 

@@ -1,6 +1,9 @@
 mod create_account;
-mod deposit_and_withdraw;
+mod deposit;
+mod info;
 mod publish_and_instantiate;
+mod transfer_between_vaults;
+mod withdraw;
 
 use clap::Parser;
 use maya_router_cli::error::*;
@@ -16,7 +19,10 @@ fn main() -> Result<(), Error> {
 pub enum Cli {
     PublishAndInstantiate(publish_and_instantiate::PublishAndInstantiate),
     CreateAccount(create_account::CreateAccount),
-    DepositAndWithdraw(deposit_and_withdraw::DepositAndWithdraw),
+    Deposit(deposit::Deposit),
+    Withdraw(withdraw::Withdraw),
+    TransferBetweenVaults(transfer_between_vaults::TransferBetweenVaults),
+    Info(info::Info),
 }
 
 impl Cli {
@@ -24,7 +30,10 @@ impl Cli {
         match self {
             Self::PublishAndInstantiate(cmd) => cmd.run(out),
             Self::CreateAccount(cmd) => cmd.run(out),
-            Self::DepositAndWithdraw(cmd) => cmd.run(out),
+            Self::Deposit(cmd) => cmd.run(out),
+            Self::Withdraw(cmd) => cmd.run(out),
+            Self::TransferBetweenVaults(cmd) => cmd.run(out),
+            Self::Info(cmd) => cmd.run(out),
         }
     }
 }

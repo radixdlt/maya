@@ -32,6 +32,13 @@ impl Clone for AccountData {
 }
 
 impl AccountData {
+    fn private_key_to_bytes(&self) -> Vec<u8> {
+        match &self.private_key {
+            PrivateKey::Secp256k1(private_key) => private_key.to_bytes(),
+            PrivateKey::Ed25519(private_key) => private_key.to_bytes(),
+        }
+    }
+
     fn new(
         network_connector: &mut GatewayNetworkConnector,
         key_type: KeyType,
@@ -47,6 +54,30 @@ impl AccountData {
             .build();
         let _ = execute_2(network_connector, private_key, manifest).unwrap();
         account
+    }
+
+    pub fn new_from_private_key(key_type: KeyType, private_key: &str) -> Self {
+        let bytes = hex::decode(private_key).expect("Cannot decode private_key");
+
+        let private_key = match key_type {
+            KeyType::Ed25519 => PrivateKey::Ed25519(
+                Ed25519PrivateKey::from_bytes(&bytes)
+                    .expect("Cannot generate private key from bytes"),
+            ),
+            KeyType::Secp256k1 => PrivateKey::Secp256k1(
+                Secp256k1PrivateKey::from_bytes(&bytes)
+                    .expect("Cannot generate private key from bytes"),
+            ),
+        };
+        let public_key = private_key.public_key();
+        let address = ComponentAddress::virtual_account_from_public_key(&public_key);
+        let badge = NonFungibleGlobalId::from_public_key(&public_key);
+        AccountData {
+            public_key,
+            private_key,
+            address,
+            badge,
+        }
     }
 
     fn new_not_initialized(key_type: KeyType, std_rng: &mut StdRng) -> Self {
@@ -92,18 +123,23 @@ impl Display for MayaRouterTester {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let address_bech32_encoder =
             AddressBech32Encoder::new(&self.gateway_network_connector.network_definition);
+
         write!(
             f,
             "Component Address: {}
 Owner Address: {}
 Asgard Vault #1 Address: {}
-Asgard Vault #2 Address: {}",
+Asgard Vault #1 Private Key: {}
+Asgard Vault #2 Address: {}
+Asgard Vault #2 Private Key: {}",
             self.component_address
                 .unwrap()
                 .display(&address_bech32_encoder),
             self.owner.address.display(&address_bech32_encoder),
             self.asgard_vault_1.address.display(&address_bech32_encoder),
+            hex::encode(self.asgard_vault_1.private_key_to_bytes()),
             self.asgard_vault_2.address.display(&address_bech32_encoder),
+            hex::encode(self.asgard_vault_2.private_key_to_bytes()),
         )
     }
 }
@@ -140,7 +176,7 @@ impl MayaRouterTester {
             },
         );
         let mut std_rng = StdRng::from_entropy();
-        let asgard_vault_1 = AccountData::new_not_initialized(KeyType::Secp256k1, &mut std_rng);
+        let asgard_vault_1 = AccountData::new_not_initialized(KeyType::Ed25519, &mut std_rng);
         let asgard_vault_2 = AccountData::new_not_initialized(KeyType::Ed25519, &mut std_rng);
         let swapper = AccountData::new(
             &mut gateway_network_connector,
@@ -166,8 +202,7 @@ impl MayaRouterTester {
         let mut seed: [u8; 32] = [0; 32];
         seed[0..30].clone_from_slice(component_address.to_vec().as_slice());
         self.std_rng = StdRng::from_seed(seed);
-        self.asgard_vault_1 =
-            AccountData::new_not_initialized(KeyType::Secp256k1, &mut self.std_rng);
+        self.asgard_vault_1 = AccountData::new_not_initialized(KeyType::Ed25519, &mut self.std_rng);
         self.asgard_vault_2 = AccountData::new_not_initialized(KeyType::Ed25519, &mut self.std_rng);
     }
 
@@ -251,7 +286,6 @@ impl MayaRouterTester {
                 )
             })
             .build();
-        println!("Deposit");
         let result = execute_2(
             &mut self.gateway_network_connector,
             clone_private_key(&from.private_key),
@@ -264,7 +298,7 @@ impl MayaRouterTester {
     pub fn transfer_out(
         &mut self,
         from_vault: AccountData,
-        to: AccountData,
+        to: ComponentAddress,
         asset: ResourceAddress,
         amount: Decimal,
         memo: &str,
@@ -282,7 +316,7 @@ impl MayaRouterTester {
                 manifest_args!(
                     from_vault.address,
                     asset,
-                    to.address,
+                    to,
                     Option::<()>::None,
                     amount,
                     memo.to_string()
@@ -290,11 +324,10 @@ impl MayaRouterTester {
             )
             .take_all_from_worktop(asset, "asset")
             .call_method_with_name_lookup(self.component_address.unwrap(), "transfer", |lookup| {
-                (to.address, lookup.bucket("asset"))
+                (to, lookup.bucket("asset"))
             })
             .build();
 
-        println!("Withdraw");
         let result = execute_2(
             &mut self.gateway_network_connector,
             clone_private_key(&from_vault.private_key),
@@ -307,7 +340,7 @@ impl MayaRouterTester {
     pub fn transfer_between_vaults(
         &mut self,
         from_vault: AccountData,
-        to_vault: AccountData,
+        to_vault_address: ComponentAddress,
         asset: ResourceAddress,
         amount: Decimal,
         memo: &str,
@@ -325,7 +358,7 @@ impl MayaRouterTester {
                 manifest_args!(
                     from_vault.address,
                     asset,
-                    to_vault.address,
+                    to_vault_address,
                     Option::<()>::None,
                     amount,
                     memo.to_string()
@@ -335,11 +368,10 @@ impl MayaRouterTester {
             .call_method_with_name_lookup(
                 self.component_address.unwrap(),
                 "direct_deposit",
-                |lookup| (to_vault.address, lookup.bucket("asset")),
+                |lookup| (to_vault_address, lookup.bucket("asset")),
             )
             .build();
 
-        println!("Transfer between vaults");
         let result = execute_2(
             &mut self.gateway_network_connector,
             clone_private_key(&from_vault.private_key),
@@ -384,7 +416,7 @@ fn maya_router_publish_and_instantiate() {
 
     maya_router.transfer_out(
         maya_router.asgard_vault_1.clone(),
-        maya_router.swapper.clone(),
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         "OUT:",
@@ -427,7 +459,7 @@ fn maya_router_deposit_and_withdraw_success() {
 
     maya_router.transfer_out(
         maya_router.asgard_vault_1.clone(),
-        maya_router.swapper.clone(),
+        maya_router.swapper.address,
         XRD,
         dec!(100),
         "OUT:",
