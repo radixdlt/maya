@@ -3,7 +3,6 @@ use clap::Parser;
 use maya_router_cli::constants::*;
 use maya_router_cli::maya_router::*;
 use radix_common::prelude::*;
-use radix_engine_interface::prelude::*;
 
 #[derive(Parser, Debug)]
 pub struct Deposit {
@@ -22,6 +21,10 @@ pub struct Deposit {
         default_value = ASGARD_VAULT_1_ADDRESS
     )]
     asgard_vault_address: String,
+
+    /// The amount to withdraw
+    #[clap(long, default_value = "100")]
+    amount: String,
 
     /// The hex-encoded private key of the package owner.
     #[clap(
@@ -46,7 +49,8 @@ pub struct Deposit {
 
 impl Deposit {
     pub fn run<O: std::io::Write>(self, f: &mut O) -> Result<(), Error> {
-        let amount = dec!(200);
+        let amount = Decimal::from_str(&self.amount).unwrap();
+
         let mut maya_router =
             MayaRouterTester::new(&self.network, Some(&self.owner_ed25519_private_key));
 
