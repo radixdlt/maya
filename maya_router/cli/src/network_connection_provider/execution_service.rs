@@ -67,6 +67,7 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
             return Ok(ExecutionReceiptSuccessContents {
                 intent_hash: String::default(),
                 new_entities: Default::default(),
+                output: Vec::new(),
             });
         }
 

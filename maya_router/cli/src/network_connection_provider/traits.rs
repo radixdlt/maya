@@ -71,4 +71,5 @@ pub struct NewEntities {
 pub struct ExecutionReceiptSuccessContents {
     pub intent_hash: String,
     pub new_entities: NewEntities,
+    pub output: Vec<Vec<u8>>,
 }

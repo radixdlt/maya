@@ -132,6 +132,7 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
                         let bech32m_address_decoder =
                             AddressBech32Decoder::new(&self.network_definition);
                         let new_global_entities = transaction_committed_result_response
+                            .clone()
                             .transaction
                             .receipt
                             .expect("We have opted into this")
@@ -169,10 +170,21 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
                         new_entities
                     };
 
+                    let output: Vec<Vec<u8>> = transaction_committed_result_response
+                        .transaction
+                        .receipt
+                        .expect("We have opted into this")
+                        .output
+                        .expect("We have opted into this")
+                        .iter()
+                        .map(|text| hex::decode(&text.hex).expect("Hex decode error"))
+                        .collect();
+
                     return Ok(ExecutionReceipt::CommitSuccess(
                         ExecutionReceiptSuccessContents {
                             intent_hash: intent_hash_string,
                             new_entities,
+                            output,
                         },
                     ));
                 }
