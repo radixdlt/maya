@@ -177,7 +177,7 @@ impl MayaRouterTester {
             network.gateway_base_url(),
             network.network_definition(),
             PollingConfiguration {
-                interval_in_seconds: 10,
+                interval_in_seconds: 2,
                 retries: 10,
             },
         );
