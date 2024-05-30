@@ -11,6 +11,7 @@ mod maya_router {
     enable_method_auth! {
         methods {
             user_deposit => PUBLIC;
+            lock_fee => PUBLIC;
             withdraw => PUBLIC;
             transfer => PUBLIC;
             direct_deposit => PUBLIC;
@@ -65,12 +66,7 @@ mod maya_router {
             vault_address: ComponentAddress,
             resource_address: ResourceAddress,
             amount: Decimal,
-            fee_to_lock: Decimal,
         ) -> FungibleBucket {
-            if fee_to_lock.is_negative() {
-                Runtime::panic(format!("Negative fee to lock {:?} provided", fee_to_lock));
-            }
-
             let mut vault_resources = match self.vaults.get_mut(&vault_address) {
                 Some(vault_resources) => vault_resources,
                 None => Runtime::panic(format!(
@@ -80,20 +76,11 @@ mod maya_router {
             };
 
             let mut vault = if resource_address == XRD {
-                let mut vault = vault_resources
+                let vault = vault_resources
                     .get_mut(&XRD)
                     .expect("XRD not available in the vault");
-                if fee_to_lock.is_positive() {
-                    vault.lock_fee(fee_to_lock);
-                }
                 vault
             } else {
-                if fee_to_lock.is_positive() {
-                    vault_resources
-                        .get_mut(&XRD)
-                        .expect("XRD not available in the vault")
-                        .lock_fee(fee_to_lock);
-                }
                 vault_resources.get_mut(&resource_address).expect(&format!(
                     "Resource {:?} not available in the vault {:?}",
                     resource_address, vault_address
@@ -173,6 +160,30 @@ mod maya_router {
             });
         }
 
+        /// Lock fee from the given `vault_address`
+        pub fn lock_fee(&mut self, vault_address: Global<Account>, fee_to_lock: Decimal) {
+            Runtime::assert_access_rule(vault_address.get_owner_role().rule);
+
+            if fee_to_lock.is_negative() {
+                Runtime::panic(format!("Negative fee to lock {:?} provided", fee_to_lock));
+            } else if fee_to_lock.is_zero() {
+                return;
+            }
+
+            let mut vault_resources = match self.vaults.get_mut(&vault_address.address()) {
+                Some(vault_resources) => vault_resources,
+                None => Runtime::panic(format!(
+                    "No resource has been deposited to vault {:?}",
+                    vault_address
+                )),
+            };
+
+            let mut vault = vault_resources
+                .get_mut(&XRD)
+                .expect("XRD not available in the vault");
+            vault.lock_fee(fee_to_lock);
+        }
+
         /// Withdraws a specified `amount` of resource from the vault corresponding to the given `vault_address`
         /// and returns it to the caller.
         ///
@@ -181,8 +192,6 @@ mod maya_router {
         ///
         /// A badge corresponding to the `vault_address` must be present (or, in other words, the transaction
         /// must be signed by a corresponding private key).
-        ///
-        /// This methods allows to optionally lock a fee from the XRD vault owned by `vault_address`.
         pub fn withdraw(
             &mut self,
             vault_address: Global<Account>,
@@ -191,16 +200,10 @@ mod maya_router {
             aggregator: Option<AggregatorInfo>,
             amount: Decimal,
             memo: String,
-            fee_to_lock: Decimal,
         ) -> FungibleBucket {
             Runtime::assert_access_rule(vault_address.get_owner_role().rule);
 
-            let bucket = self.vault_take(
-                vault_address.address(),
-                resource_address,
-                amount,
-                fee_to_lock,
-            );
+            let bucket = self.vault_take(vault_address.address(), resource_address, amount);
 
             Runtime::emit_event(MayaRouterWithdrawEvent {
                 vault_address: vault_address.address(),

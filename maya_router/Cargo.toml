@@ -4,13 +4,13 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-sbor = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
-scrypto = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
+sbor = { version = "1.2.0" }
+scrypto = { version = "1.2.0" }
 
 [dev-dependencies]
-scrypto-test = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
-scrypto-compiler = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
-radix-engine = { git = "https://github.com/radixdlt/radixdlt-scrypto", rev = "b82a7db0a0" }
+scrypto-test = { version = "1.2.0" }
+scrypto-compiler = { version = "1.2.0" }
+radix-engine = { version = "1.2.0" }
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = { version = "0.26.2" }
 

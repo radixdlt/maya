@@ -40,6 +40,29 @@ impl Account {
             badge,
         }
     }
+
+    fn new_not_initialized(ledger: &mut DefaultLedgerSimulator, key_type: KeyType) -> Self {
+        let account: (PublicKey, PrivateKey) = match key_type {
+            KeyType::Ed25519 => {
+                let (public_key, private_key) = ledger.new_ed25519_key_pair();
+                (public_key.into(), private_key.into())
+            }
+            KeyType::Secp256k1 => {
+                let (public_key, private_key) = ledger.new_key_pair();
+                (public_key.into(), private_key.into())
+            }
+        };
+        let address = ComponentAddress::virtual_account_from_public_key(&account.0.clone());
+
+        let badge = NonFungibleGlobalId::from_public_key(&account.0);
+
+        Account {
+            _public_key: account.0,
+            _private_key: account.1,
+            address,
+            badge,
+        }
+    }
 }
 
 struct MayaRouterSimulator {
@@ -55,10 +78,6 @@ struct MayaRouterSimulator {
 impl MayaRouterSimulator {
     const BLUEPRINT_NAME: &'static str = "MayaRouter";
 
-    pub fn manifest_builder_with_faucet_fee() -> ManifestBuilder {
-        ManifestBuilder::new().lock_fee_from_faucet()
-    }
-
     pub fn create_component(ledger: &mut DefaultLedgerSimulator) -> TransactionReceipt {
         let mut compiler = ScryptoCompiler::builder()
             .manifest_path(this_package!())
@@ -69,7 +88,8 @@ impl MayaRouterSimulator {
         let package_address = ledger
             .publish_package_simple((artifacts.wasm.content, artifacts.package_definition.content));
         ledger.execute_manifest(
-            Self::manifest_builder_with_faucet_fee()
+            ManifestBuilder::new()
+                .lock_fee_from_faucet()
                 .call_function(
                     package_address,
                     Self::BLUEPRINT_NAME,
@@ -85,8 +105,11 @@ impl MayaRouterSimulator {
         let mut ledger = LedgerSimulatorBuilder::new().build();
         // Owner account
         let owner = Account::new(&mut ledger, KeyType::Ed25519);
-        let asgard_vault_1 = Account::new(&mut ledger, KeyType::Secp256k1);
-        let asgard_vault_2 = Account::new(&mut ledger, KeyType::Ed25519);
+
+        // We are using not initialized accounts. They will be initialized once someone
+        // will deposit some resources to them.
+        let asgard_vault_1 = Account::new_not_initialized(&mut ledger, KeyType::Secp256k1);
+        let asgard_vault_2 = Account::new_not_initialized(&mut ledger, KeyType::Ed25519);
         let swapper = Account::new(&mut ledger, KeyType::Secp256k1);
 
         let mut resources = indexmap!();
@@ -129,7 +152,8 @@ impl MayaRouterSimulator {
     pub fn set_only_swapper_can_deposit(&mut self) {
         let badge = ResourceOrNonFungible::NonFungible(self.swapper.badge.clone());
         self.ledger.execute_manifest(
-            Self::manifest_builder_with_faucet_fee()
+            ManifestBuilder::new()
+                .lock_fee_from_faucet()
                 .call_method(
                     self.swapper.address,
                     ACCOUNT_SET_DEFAULT_DEPOSIT_RULE_IDENT,
@@ -163,7 +187,8 @@ impl MayaRouterSimulator {
         amount: Decimal,
         memo: &str,
     ) -> TransactionReceipt {
-        let manifest = Self::manifest_builder_with_faucet_fee()
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
             .withdraw_from_account(from, asset, amount)
             .take_all_from_worktop(asset, "bucket")
             .with_bucket("bucket", |builder, bucket| {
@@ -187,12 +212,12 @@ impl MayaRouterSimulator {
         memo: &str,
         fee_to_lock: Decimal,
     ) -> TransactionReceipt {
-        let builder = if fee_to_lock <= 0.into() {
-            Self::manifest_builder_with_faucet_fee()
-        } else {
-            ManifestBuilder::new()
-        };
-        let manifest = builder
+        let manifest = ManifestBuilder::new()
+            .call_method(
+                self.component_address,
+                "lock_fee",
+                manifest_args!(vault_address, fee_to_lock),
+            )
             .call_method(
                 self.component_address,
                 "withdraw",
@@ -202,8 +227,7 @@ impl MayaRouterSimulator {
                     to,
                     Option::<()>::None,
                     amount,
-                    memo.to_string(),
-                    fee_to_lock
+                    memo.to_string()
                 ),
             )
             .take_all_from_worktop(asset, "asset")
@@ -224,7 +248,12 @@ impl MayaRouterSimulator {
         memo: &str,
         fee_to_lock: Decimal,
     ) -> TransactionReceipt {
-        let manifest = Self::manifest_builder_with_faucet_fee()
+        let manifest = ManifestBuilder::new()
+            .call_method(
+                self.component_address,
+                "lock_fee",
+                manifest_args!(from_vault_address, fee_to_lock),
+            )
             .call_method(
                 self.component_address,
                 "withdraw",
@@ -234,8 +263,7 @@ impl MayaRouterSimulator {
                     to_vault_address,
                     Option::<()>::None,
                     amount,
-                    memo.to_string(),
-                    fee_to_lock
+                    memo.to_string()
                 ),
             )
             .take_all_from_worktop(asset, "asset")
@@ -351,7 +379,8 @@ fn maya_router_deposit_and_transfer_out_success() {
             TransferOut::LockerUsed => {
                 let locker = maya_router.get_account_locker().unwrap();
 
-                let manifest = MayaRouterSimulator::manifest_builder_with_faucet_fee()
+                let manifest = ManifestBuilder::new()
+                    .lock_fee_from_faucet()
                     .call_method(
                         locker,
                         "claim",
@@ -384,7 +413,8 @@ fn maya_router_deposit_sender_non_real_account() {
     let swap_memo = "SWAP:MAYA.CACAO";
 
     // Act
-    let manifest = MayaRouterSimulator::manifest_builder_with_faucet_fee()
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
         .withdraw_from_account(maya_router.swapper.address, XRD, dec!(100))
         .take_all_from_worktop(XRD, "bucket")
         .with_bucket("bucket", |builder, bucket| {
@@ -452,10 +482,10 @@ fn maya_router_transfer_out_negative_fee_to_lock() {
     );
 
     // Assert
-    receipt.expect_specific_failure(|e| match e {
-        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-            format!("Negative fee to lock {:?} provided", fee_to_lock) == s.to_string()
-        }
+    receipt.expect_specific_rejection(|e| match e {
+        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(RuntimeError::ApplicationError(
+            ApplicationError::PanicMessage(s),
+        )) => format!("Negative fee to lock {:?} provided", fee_to_lock) == s.to_string(),
         _ => false,
     });
 }
@@ -512,6 +542,7 @@ fn maya_router_transfer_out_asset_not_available() {
     // Act
     let swap_memo = "SWAP:MAYA.CACAO";
     let tx_out_memo = "OUT:";
+    let fee_to_lock = dec!(10);
 
     // Perform Swap
     // Act
@@ -520,74 +551,64 @@ fn maya_router_transfer_out_asset_not_available() {
         maya_router.swapper.address,
         maya_router.swapper.badge.clone(),
         XRD,
-        dec!(100),
+        dec!(200),
         swap_memo,
     );
 
     // Assert
     receipt.expect_commit_success();
 
-    for fee_to_lock in [dec!(10), dec!(0)] {
-        // Perform Send of non-existing asset
-        // Act
-        let receipt = maya_router.transfer_out(
-            maya_router.asgard_vault_1.address,
-            maya_router.asgard_vault_1.badge.clone(),
-            maya_router.swapper.address,
-            *maya_router.resources.get("USDT").unwrap(),
-            dec!(100),
-            tx_out_memo,
-            fee_to_lock,
-        );
+    // Perform Send of non-existing asset
+    // Act
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.address,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
+        fee_to_lock,
+    );
 
-        // Assert
-        receipt.expect_specific_failure(|e| match e {
-            RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                s.contains("Resource") && s.contains("not available in the vault")
-            }
-            _ => false,
-        });
-    }
+    // Assert
+    receipt.expect_specific_failure(|e| match e {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
+            s.contains("Resource") && s.contains("not available in the vault")
+        }
+        _ => false,
+    });
 }
 
 #[test]
-fn maya_router_transfer_out_asgard_vault_not_available() {
+fn maya_router_transfer_out_insufficient_balance() {
     // Arrange
     let mut maya_router = MayaRouterSimulator::new();
 
     // Act
     let tx_out_memo = "OUT:";
+    let fee_to_lock = dec!(10);
 
-    for fee_to_lock in [dec!(10), dec!(0)] {
-        // Perform Send from non-existing Asgard Vault
-        // Act
-        let receipt = maya_router.transfer_out(
-            maya_router.asgard_vault_1.address,
-            maya_router.asgard_vault_1.badge.clone(),
-            maya_router.swapper.address,
-            *maya_router.resources.get("USDT").unwrap(),
-            dec!(100),
-            tx_out_memo,
-            fee_to_lock,
-        );
+    // Perform Send from non-existing Asgard Vault
+    // Act
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.address,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
+        fee_to_lock,
+    );
 
-        // Assert
-        if fee_to_lock.is_zero() {
-            receipt.expect_specific_failure(|e| match e {
-                RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                    s.contains("No resource has been deposited to vault")
-                }
-                _ => false,
-            });
-        } else {
-            receipt.expect_specific_rejection(|e| match e {
-                RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
-                    RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)),
-                ) => s.contains("No resource has been deposited to vault"),
-                _ => false,
-            });
-        }
-    }
+    // Assert
+    receipt.expect_specific_rejection(|e| match e {
+        RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+            RuntimeError::SystemModuleError(SystemModuleError::CostingError(
+                CostingError::FeeReserveError(FeeReserveError::InsufficientBalance { .. }),
+            )),
+        ) => true,
+        _ => false,
+    });
 }
 
 #[test]
@@ -598,6 +619,7 @@ fn maya_router_transfer_out_assert_access_rule_failed() {
     // Act
     let swap_memo = "SWAP:MAYA.CACAO";
     let tx_out_memo = "OUT:";
+    let fee_to_lock = dec!(10);
 
     // Perform Swap
     // Act
@@ -613,37 +635,26 @@ fn maya_router_transfer_out_assert_access_rule_failed() {
     // Assert
     receipt.expect_commit_success();
 
-    for fee_to_lock in [dec!(10), dec!(0)] {
-        // Act
-        // Expect AssertAccessRuleFailed when using Asgard Vault 2 badge for Asgard Vault 1
-        let receipt = maya_router.transfer_out(
-            maya_router.asgard_vault_1.address,
-            maya_router.asgard_vault_2.badge.clone(),
-            maya_router.swapper.address,
-            *maya_router.resources.get("USDT").unwrap(),
-            dec!(100),
-            tx_out_memo,
-            fee_to_lock,
-        );
+    // Act
+    // Expect AssertAccessRuleFailed when using Asgard Vault 2 badge for Asgard Vault 1
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.address,
+        maya_router.asgard_vault_2.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
+        fee_to_lock,
+    );
 
-        if fee_to_lock.is_zero() {
-            receipt.expect_specific_failure(|e| {
-                matches!(
-                    e,
-                    RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
-                )
-            });
-        } else {
-            receipt.expect_specific_rejection(|e| {
-                matches!(
-                    e,
-                    RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
-                        RuntimeError::SystemError(SystemError::AssertAccessRuleFailed)
-                    )
-                )
-            });
-        }
-    }
+    receipt.expect_specific_rejection(|e| {
+        matches!(
+            e,
+            RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(RuntimeError::SystemError(
+                SystemError::AssertAccessRuleFailed
+            ))
+        )
+    });
 }
 
 #[test]
@@ -692,7 +703,7 @@ fn maya_router_multiple_asgard_vaults() {
         XRD,
         dec!(100),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
     receipt.expect_commit_success();
 
@@ -732,6 +743,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
     let mut maya_router = MayaRouterSimulator::new();
     let swap_memo = "SWAP:MAYA.CACAO";
     let tx_out_memo = "OUT: AsgardVault transfer";
+    let fee_to_lock = dec!(10);
 
     // Act
     let receipt = maya_router.deposit(
@@ -750,9 +762,9 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         maya_router.asgard_vault_1.badge.clone(),
         maya_router.asgard_vault_2.address,
         XRD,
-        dec!(1000),
+        dec!(990),
         tx_out_memo,
-        dec!(0),
+        dec!(10),
     );
 
     // Assert
@@ -774,44 +786,33 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         scrypto_decode::<MayaRouterDirectDepositEvent>(&event_data).unwrap(),
         MayaRouterDirectDepositEvent {
             resource_address: XRD,
-            amount: dec!(1000),
+            amount: dec!(990),
             vault_address: maya_router.asgard_vault_2.address,
         }
     );
 
-    for fee_to_lock in [dec!(10), dec!(0)] {
-        // Try Transfer out XRD from Asgard Vault 1
-        let receipt = maya_router.transfer_out(
-            maya_router.asgard_vault_1.address,
-            maya_router.asgard_vault_1.badge.clone(),
-            maya_router.swapper.address,
-            *maya_router.resources.get("USDT").unwrap(),
-            dec!(100),
-            tx_out_memo,
-            fee_to_lock,
-        );
+    // Try Transfer out XRD from Asgard Vault 1
+    let receipt = maya_router.transfer_out(
+        maya_router.asgard_vault_1.address,
+        maya_router.asgard_vault_1.badge.clone(),
+        maya_router.swapper.address,
+        *maya_router.resources.get("USDT").unwrap(),
+        dec!(100),
+        tx_out_memo,
+        fee_to_lock,
+    );
 
-        // Assert
-        if fee_to_lock.is_zero() {
-            receipt.expect_specific_failure(|e| match e {
-                RuntimeError::ApplicationError(ApplicationError::PanicMessage(s)) => {
-                    s.contains("Resource") && s.contains("not available in the vault")
-                }
-                _ => false,
-            });
-        } else {
-            receipt.expect_specific_rejection(|e| {
-                matches!(
-                    e,
-                    &RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
-                        RuntimeError::ApplicationError(ApplicationError::VaultError(
-                            VaultError::LockFeeInsufficientBalance { .. }
-                        ))
-                    )
-                )
-            });
-        }
-    }
+    // Assert
+    receipt.expect_specific_rejection(|e| {
+        matches!(
+            e,
+            &RejectionReason::ErrorBeforeLoanAndDeferredCostsRepaid(
+                RuntimeError::ApplicationError(ApplicationError::VaultError(
+                    VaultError::LockFeeInsufficientBalance { .. }
+                ))
+            )
+        )
+    });
 
     // Transfer out XRD from Asgard Vault 2
     let receipt = maya_router.transfer_out(
@@ -821,7 +822,7 @@ fn maya_router_move_assets_from_asgard_vault_1_to_asgard_vault_2() {
         XRD,
         dec!(100),
         tx_out_memo,
-        dec!(10),
+        fee_to_lock,
     );
     receipt.expect_commit_success();
 }
