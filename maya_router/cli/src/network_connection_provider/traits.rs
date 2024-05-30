@@ -30,21 +30,21 @@ pub trait NetworkConnectionProvider {
     type Error: Debug;
 
     fn execute_transaction(
-        &mut self,
+        &self,
         notarized_transaction: &NotarizedTransactionV1,
     ) -> Result<ExecutionReceipt, Self::Error>;
 
     fn preview_transaction(
-        &mut self,
+        &self,
         preview_intent: PreviewIntentV1,
     ) -> Result<TransactionReceiptV1, Self::Error>;
 
-    fn get_current_epoch(&mut self) -> Result<Epoch, Self::Error>;
+    fn get_current_epoch(&self) -> Result<Epoch, Self::Error>;
 
-    fn get_network_definition(&mut self) -> Result<NetworkDefinition, Self::Error>;
+    fn get_network_definition(&self) -> Result<NetworkDefinition, Self::Error>;
 
     fn read_component_state<V: ScryptoDecode>(
-        &mut self,
+        &self,
         component_address: ComponentAddress,
     ) -> Result<V, Self::Error>;
 }

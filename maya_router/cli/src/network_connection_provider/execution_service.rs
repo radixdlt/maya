@@ -30,7 +30,7 @@ use super::*;
 /// submit, and return the result of transactions.
 pub struct ExecutionService<'e, E: NetworkConnectionProvider> {
     /// The executor that the service will use to execute transactions.
-    executor: &'e mut E,
+    executor: &'e E,
     /// The account to use for the payment of fees.
     fee_payer_account_address: ComponentAddress,
     /// The notary of the transaction
@@ -41,7 +41,7 @@ pub struct ExecutionService<'e, E: NetworkConnectionProvider> {
 
 impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
     pub fn new(
-        executor: &'e mut E,
+        executor: &'e E,
         fee_payer_account_address: ComponentAddress,
         notary_private_key: &'e PrivateKey,
         signers_private_keys: &'e [&'e PrivateKey],
@@ -55,7 +55,7 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
     }
 
     pub fn execute_manifest(
-        &mut self,
+        &self,
         mut manifest: TransactionManifestV1,
         insert_lock_fee: bool,
     ) -> Result<
@@ -201,9 +201,9 @@ impl<'e, E: NetworkConnectionProvider> ExecutionService<'e, E> {
         }
     }
 
-    pub fn with_network_connection_provider<F, O>(&mut self, callback: F) -> O
+    pub fn with_network_connection_provider<F, O>(&self, callback: F) -> O
     where
-        F: Fn(&mut E) -> O,
+        F: Fn(&E) -> O,
     {
         callback(self.executor)
     }

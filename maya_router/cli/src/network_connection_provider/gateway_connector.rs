@@ -58,7 +58,7 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
     type Error = GatewayExecutorError;
 
     fn execute_transaction(
-        &mut self,
+        &self,
         notarized_transaction: &NotarizedTransactionV1,
     ) -> Result<ExecutionReceipt, Self::Error> {
         let notarized_transaction_payload_bytes = notarized_transaction
@@ -200,7 +200,7 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
     }
 
     fn preview_transaction(
-        &mut self,
+        &self,
         preview_intent: PreviewIntentV1,
     ) -> Result<TransactionReceiptV1, Self::Error> {
         let string_manifest = decompile(
@@ -248,7 +248,7 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
             .map(|receipt| receipt.fully_update_and_into_latest_version())
     }
 
-    fn get_current_epoch(&mut self) -> Result<Epoch, Self::Error> {
+    fn get_current_epoch(&self) -> Result<Epoch, Self::Error> {
         Ok(Epoch::of(
             gateway_status(&self.configuration)
                 .map_err(GatewayExecutorError::GatewayStatusError)?
@@ -257,12 +257,12 @@ impl NetworkConnectionProvider for GatewayNetworkConnector {
         ))
     }
 
-    fn get_network_definition(&mut self) -> Result<NetworkDefinition, Self::Error> {
+    fn get_network_definition(&self) -> Result<NetworkDefinition, Self::Error> {
         Ok(self.network_definition.clone())
     }
 
     fn read_component_state<V: ScryptoDecode>(
-        &mut self,
+        &self,
         component_address: ComponentAddress,
     ) -> Result<V, Self::Error> {
         let encoder = AddressBech32Encoder::new(&self.network_definition);
