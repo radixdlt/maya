@@ -67,7 +67,7 @@ impl Deposit {
 
         writeln!(
             f,
-            "Depositing {} XRD\nfrom {}\nto Asgard Vault {}",
+            "Depositing\n\t{} XRD\nfrom\n\t{}\nto Asgard Vault\n\t{}",
             amount,
             depositor_account.address.display(&address_bech32_encoder),
             self.asgard_vault_address

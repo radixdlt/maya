@@ -73,7 +73,7 @@ impl TransferBetweenVaults {
 
         writeln!(
             f,
-            "Transfer {} XRD\nfrom Asgard Vault {}\nto Asgard Vault {}",
+            "Transfer\n\t{} XRD\nfrom Asgard Vault\n\t{}\nto Asgard Vault\n\t{}",
             amount,
             from_asgard_vault_account
                 .address

@@ -69,7 +69,7 @@ impl Withdraw {
 
         writeln!(
             f,
-            "Withdrawing {} XRD\nfrom Asgard Vault {}\nto {}",
+            "Withdrawing\n\t{} XRD\nfrom Asgard Vault\n\t{}\nto\n\t{}",
             amount,
             asgarg_vault_account
                 .address
