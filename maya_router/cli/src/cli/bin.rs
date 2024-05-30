@@ -1,5 +1,6 @@
 mod create_account;
 mod deposit;
+mod get_balance;
 mod info;
 mod publish_and_instantiate;
 mod transfer_between_vaults;
@@ -22,6 +23,7 @@ pub enum Cli {
     Deposit(deposit::Deposit),
     Withdraw(withdraw::Withdraw),
     TransferBetweenVaults(transfer_between_vaults::TransferBetweenVaults),
+    GetBalance(get_balance::GetBalance),
     Info(info::Info),
 }
 
@@ -33,6 +35,7 @@ impl Cli {
             Self::Deposit(cmd) => cmd.run(out),
             Self::Withdraw(cmd) => cmd.run(out),
             Self::TransferBetweenVaults(cmd) => cmd.run(out),
+            Self::GetBalance(cmd) => cmd.run(out),
             Self::Info(cmd) => cmd.run(out),
         }
     }

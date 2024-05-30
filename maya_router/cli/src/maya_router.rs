@@ -128,18 +128,24 @@ impl Display for MayaRouterTester {
             f,
             "Component Address: {}
 Owner Address: {}
-Asgard Vault #1 Address: {}
-Asgard Vault #1 Private Key: {}
-Asgard Vault #2 Address: {}
-Asgard Vault #2 Private Key: {}",
+Asgard Vault #1
+    Address: {}
+    Private Key: {}
+    Balance: {} XRD
+Asgard Vault #2
+    Address: {}
+    Private Key: {}
+    Balance: {} XRD",
             self.component_address
                 .unwrap()
                 .display(&address_bech32_encoder),
             self.owner.address.display(&address_bech32_encoder),
             self.asgard_vault_1.address.display(&address_bech32_encoder),
             hex::encode(self.asgard_vault_1.private_key_to_bytes()),
+            self.get_vault_balance(self.asgard_vault_1.clone(), XRD),
             self.asgard_vault_2.address.display(&address_bech32_encoder),
             hex::encode(self.asgard_vault_2.private_key_to_bytes()),
+            self.get_vault_balance(self.asgard_vault_2.clone(), XRD)
         )
     }
 }
@@ -264,6 +270,30 @@ impl MayaRouterTester {
             .unwrap();
         self.set_component_address(*component_address);
         *component_address
+    }
+
+    pub fn get_vault_balance(&self, vault: AccountData, asset: ResourceAddress) -> Decimal {
+        let manifest = ManifestBuilder::new()
+            .call_method(
+                self.component_address.unwrap(),
+                "lock_fee",
+                manifest_args!(vault.address, dec!(10)),
+            )
+            .call_method(
+                self.component_address.unwrap(),
+                "get_vault_balance",
+                manifest_args!(vault.address, asset,),
+            )
+            .build();
+        let result = execute_2(
+            &self.gateway_network_connector,
+            clone_private_key(&vault.private_key),
+            manifest,
+        )
+        .unwrap();
+        println!("TxId: {}", result.intent_hash);
+        let balance: Decimal = scrypto_decode(result.output.get(1).unwrap()).unwrap();
+        balance
     }
 
     pub fn deposit(
