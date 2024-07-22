@@ -1,6 +1,41 @@
 use scrypto::prelude::*;
 
 #[blueprint]
+#[types(ResourceAddress, FungibleVault)]
+mod no_op_aggregator {
+    enable_method_auth! {
+        methods {
+            swap_out => PUBLIC;
+        }
+    }
+
+    struct NoOpAggregator {
+    }
+
+    impl NoOpAggregator {
+        pub fn instantiate() -> Global<NoOpAggregator> {
+            let (maya_router_address_reservation, _) =
+                Runtime::allocate_component_address(NoOpAggregator::blueprint_id());
+            Self {
+            }
+            .instantiate()
+            .prepare_to_globalize(OwnerRole::None)
+            .with_address(maya_router_address_reservation)
+            .globalize()
+        }
+
+        pub fn swap_out(
+            &mut self,
+            bucket: FungibleBucket,
+            _target_resource_address: ResourceAddress,
+            _min_amount: Decimal,
+        ) -> FungibleBucket {
+            return bucket
+        }
+    }
+}
+
+#[blueprint]
 #[types(ComponentAddress, ResourceAddress, FungibleVault, KeyValueStore<ResourceAddress, FungibleVault>)]
 #[events(
     MayaRouterDepositEvent,
