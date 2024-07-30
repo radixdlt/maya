@@ -40,7 +40,8 @@ mod no_op_aggregator {
 #[events(
     MayaRouterDepositEvent,
     MayaRouterWithdrawEvent,
-    MayaRouterDirectDepositEvent
+    MayaRouterDirectDepositEvent,
+    MayaRouterGenericVaultEvent
 )]
 mod maya_router {
     enable_method_auth! {
@@ -51,6 +52,7 @@ mod maya_router {
             transfer => PUBLIC;
             direct_deposit => PUBLIC;
             get_vault_balance => PUBLIC;
+            emit_generic_vault_event => PUBLIC;
         }
     }
 
@@ -286,6 +288,19 @@ mod maya_router {
 
             res
         }
+
+        pub fn emit_generic_vault_event(
+            &mut self,
+            vault_address: Global<Account>,
+            memo: String,
+        ) -> () {
+            Runtime::assert_access_rule(vault_address.get_owner_role().rule);
+
+            Runtime::emit_event(MayaRouterGenericVaultEvent {
+                vault_address: vault_address.address(),
+                memo,
+            });
+        }
     }
 }
 
@@ -329,4 +344,12 @@ pub struct AggregatorInfo {
     pub address: ComponentAddress,
     pub target_resource: ResourceAddress,
     pub min_amount: Decimal,
+}
+
+/// Can be used as a generic marker event for vault actions.
+/// E.g. to report TxSetDepositMode.
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
+pub struct MayaRouterGenericVaultEvent {
+    pub vault_address: ComponentAddress,
+    pub memo: String,
 }
