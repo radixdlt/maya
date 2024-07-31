@@ -1,11 +1,47 @@
 use scrypto::prelude::*;
 
 #[blueprint]
+#[types(ResourceAddress, FungibleVault)]
+mod no_op_aggregator {
+    enable_method_auth! {
+        methods {
+            swap_out => PUBLIC;
+        }
+    }
+
+    struct NoOpAggregator {
+    }
+
+    impl NoOpAggregator {
+        pub fn instantiate() -> Global<NoOpAggregator> {
+            let (maya_router_address_reservation, _) =
+                Runtime::allocate_component_address(NoOpAggregator::blueprint_id());
+            Self {
+            }
+            .instantiate()
+            .prepare_to_globalize(OwnerRole::None)
+            .with_address(maya_router_address_reservation)
+            .globalize()
+        }
+
+        pub fn swap_out(
+            &mut self,
+            bucket: FungibleBucket,
+            _target_resource_address: ResourceAddress,
+            _min_amount: Decimal,
+        ) -> FungibleBucket {
+            return bucket
+        }
+    }
+}
+
+#[blueprint]
 #[types(ComponentAddress, ResourceAddress, FungibleVault, KeyValueStore<ResourceAddress, FungibleVault>)]
 #[events(
     MayaRouterDepositEvent,
     MayaRouterWithdrawEvent,
-    MayaRouterDirectDepositEvent
+    MayaRouterDirectDepositEvent,
+    MayaRouterGenericVaultEvent
 )]
 mod maya_router {
     enable_method_auth! {
@@ -16,6 +52,7 @@ mod maya_router {
             transfer => PUBLIC;
             direct_deposit => PUBLIC;
             get_vault_balance => PUBLIC;
+            emit_generic_vault_event => PUBLIC;
         }
     }
 
@@ -251,6 +288,19 @@ mod maya_router {
 
             res
         }
+
+        pub fn emit_generic_vault_event(
+            &mut self,
+            vault_address: Global<Account>,
+            memo: String,
+        ) -> () {
+            Runtime::assert_access_rule(vault_address.get_owner_role().rule);
+
+            Runtime::emit_event(MayaRouterGenericVaultEvent {
+                vault_address: vault_address.address(),
+                memo,
+            });
+        }
     }
 }
 
@@ -294,4 +344,12 @@ pub struct AggregatorInfo {
     pub address: ComponentAddress,
     pub target_resource: ResourceAddress,
     pub min_amount: Decimal,
+}
+
+/// Can be used as a generic marker event for vault actions.
+/// E.g. to report TxSetDepositMode.
+#[derive(ScryptoSbor, ScryptoEvent, Debug, PartialEq, Eq)]
+pub struct MayaRouterGenericVaultEvent {
+    pub vault_address: ComponentAddress,
+    pub memo: String,
 }
