@@ -11,7 +11,7 @@ type SborData struct {
     // The hex-encoded, raw SBOR-encoded data
     hex *string
     // The (untyped) unannotated programmatic SBOR JSON
-    programmatic_json i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable
+    programmatic_json SborData_programmatic_jsonable
 }
 // NewSborData instantiates a new SborData and sets the default values.
 func NewSborData()(*SborData) {
@@ -45,12 +45,12 @@ func (m *SborData) GetFieldDeserializers()(map[string]func(i878a80d2330e89d26896
         return nil
     }
     res["programmatic_json"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
-        val, err := n.GetObjectValue(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.CreateUntypedNodeFromDiscriminatorValue)
+        val, err := n.GetObjectValue(CreateSborData_programmatic_jsonFromDiscriminatorValue)
         if err != nil {
             return err
         }
         if val != nil {
-            m.SetProgrammaticJson(val.(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable))
+            m.SetProgrammaticJson(val.(SborData_programmatic_jsonable))
         }
         return nil
     }
@@ -62,8 +62,8 @@ func (m *SborData) GetHex()(*string) {
     return m.hex
 }
 // GetProgrammaticJson gets the programmatic_json property value. The (untyped) unannotated programmatic SBOR JSON
-// returns a UntypedNodeable when successful
-func (m *SborData) GetProgrammaticJson()(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable) {
+// returns a SborData_programmatic_jsonable when successful
+func (m *SborData) GetProgrammaticJson()(SborData_programmatic_jsonable) {
     return m.programmatic_json
 }
 // Serialize serializes information the current object
@@ -97,14 +97,14 @@ func (m *SborData) SetHex(value *string)() {
     m.hex = value
 }
 // SetProgrammaticJson sets the programmatic_json property value. The (untyped) unannotated programmatic SBOR JSON
-func (m *SborData) SetProgrammaticJson(value i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable)() {
+func (m *SborData) SetProgrammaticJson(value SborData_programmatic_jsonable)() {
     m.programmatic_json = value
 }
 type SborDataable interface {
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.AdditionalDataHolder
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
     GetHex()(*string)
-    GetProgrammaticJson()(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable)
+    GetProgrammaticJson()(SborData_programmatic_jsonable)
     SetHex(value *string)()
-    SetProgrammaticJson(value i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.UntypedNodeable)()
+    SetProgrammaticJson(value SborData_programmatic_jsonable)()
 }
