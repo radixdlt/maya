@@ -1,0 +1,68 @@
+package models
+
+import (
+    i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91 "github.com/microsoft/kiota-abstractions-go/serialization"
+)
+
+type BootLoaderModuleFieldTransactionValidationConfigurationSubstate struct {
+    Substate
+    // The config property
+    config TransactionValidationConfigable
+}
+// NewBootLoaderModuleFieldTransactionValidationConfigurationSubstate instantiates a new BootLoaderModuleFieldTransactionValidationConfigurationSubstate and sets the default values.
+func NewBootLoaderModuleFieldTransactionValidationConfigurationSubstate()(*BootLoaderModuleFieldTransactionValidationConfigurationSubstate) {
+    m := &BootLoaderModuleFieldTransactionValidationConfigurationSubstate{
+        Substate: *NewSubstate(),
+    }
+    return m
+}
+// CreateBootLoaderModuleFieldTransactionValidationConfigurationSubstateFromDiscriminatorValue creates a new instance of the appropriate class based on discriminator value
+// returns a Parsable when successful
+func CreateBootLoaderModuleFieldTransactionValidationConfigurationSubstateFromDiscriminatorValue(parseNode i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable, error) {
+    return NewBootLoaderModuleFieldTransactionValidationConfigurationSubstate(), nil
+}
+// GetConfig gets the config property value. The config property
+// returns a TransactionValidationConfigable when successful
+func (m *BootLoaderModuleFieldTransactionValidationConfigurationSubstate) GetConfig()(TransactionValidationConfigable) {
+    return m.config
+}
+// GetFieldDeserializers the deserialization information for the current model
+// returns a map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error) when successful
+func (m *BootLoaderModuleFieldTransactionValidationConfigurationSubstate) GetFieldDeserializers()(map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error)) {
+    res := m.Substate.GetFieldDeserializers()
+    res["config"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetObjectValue(CreateTransactionValidationConfigFromDiscriminatorValue)
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetConfig(val.(TransactionValidationConfigable))
+        }
+        return nil
+    }
+    return res
+}
+// Serialize serializes information the current object
+func (m *BootLoaderModuleFieldTransactionValidationConfigurationSubstate) Serialize(writer i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.SerializationWriter)(error) {
+    err := m.Substate.Serialize(writer)
+    if err != nil {
+        return err
+    }
+    {
+        err = writer.WriteObjectValue("config", m.GetConfig())
+        if err != nil {
+            return err
+        }
+    }
+    return nil
+}
+// SetConfig sets the config property value. The config property
+func (m *BootLoaderModuleFieldTransactionValidationConfigurationSubstate) SetConfig(value TransactionValidationConfigable)() {
+    m.config = value
+}
+type BootLoaderModuleFieldTransactionValidationConfigurationSubstateable interface {
+    i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
+    Substateable
+    GetConfig()(TransactionValidationConfigable)
+    SetConfig(value TransactionValidationConfigable)()
+}
