@@ -1,88 +1,80 @@
 package models
 
 import (
-	i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91 "github.com/microsoft/kiota-abstractions-go/serialization"
+    i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91 "github.com/microsoft/kiota-abstractions-go/serialization"
 )
 
 type PackageCodeKey struct {
-	// Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
-	additionalData map[string]any
-	// The hex-encoded code hash, capturing the vm-type and the code itself.
-	code_hash *string
+    // Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
+    additionalData map[string]any
+    // The hex-encoded code hash, capturing the vm-type and the code itself.
+    code_hash *string
 }
-
 // NewPackageCodeKey instantiates a new PackageCodeKey and sets the default values.
-func NewPackageCodeKey() *PackageCodeKey {
-	m := &PackageCodeKey{}
-	m.SetAdditionalData(make(map[string]any))
-	return m
+func NewPackageCodeKey()(*PackageCodeKey) {
+    m := &PackageCodeKey{
+    }
+    m.SetAdditionalData(make(map[string]any))
+    return m
 }
-
 // CreatePackageCodeKeyFromDiscriminatorValue creates a new instance of the appropriate class based on discriminator value
 // returns a Parsable when successful
-func CreatePackageCodeKeyFromDiscriminatorValue(parseNode i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) (i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable, error) {
-	return NewPackageCodeKey(), nil
+func CreatePackageCodeKeyFromDiscriminatorValue(parseNode i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable, error) {
+    return NewPackageCodeKey(), nil
 }
-
 // GetAdditionalData gets the AdditionalData property value. Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
 // returns a map[string]any when successful
-func (m *PackageCodeKey) GetAdditionalData() map[string]any {
-	return m.additionalData
+func (m *PackageCodeKey) GetAdditionalData()(map[string]any) {
+    return m.additionalData
 }
-
 // GetCodeHash gets the code_hash property value. The hex-encoded code hash, capturing the vm-type and the code itself.
 // returns a *string when successful
-func (m *PackageCodeKey) GetCodeHash() *string {
-	return m.code_hash
+func (m *PackageCodeKey) GetCodeHash()(*string) {
+    return m.code_hash
 }
-
 // GetFieldDeserializers the deserialization information for the current model
 // returns a map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error) when successful
-func (m *PackageCodeKey) GetFieldDeserializers() map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
-	res := make(map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error)
-	res["code_hash"] = func(n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
-		val, err := n.GetStringValue()
-		if err != nil {
-			return err
-		}
-		if val != nil {
-			m.SetCodeHash(val)
-		}
-		return nil
-	}
-	return res
+func (m *PackageCodeKey) GetFieldDeserializers()(map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error)) {
+    res := make(map[string]func(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode)(error))
+    res["code_hash"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetStringValue()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetCodeHash(val)
+        }
+        return nil
+    }
+    return res
 }
-
 // Serialize serializes information the current object
-func (m *PackageCodeKey) Serialize(writer i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.SerializationWriter) error {
-	{
-		err := writer.WriteStringValue("code_hash", m.GetCodeHash())
-		if err != nil {
-			return err
-		}
-	}
-	{
-		err := writer.WriteAdditionalData(m.GetAdditionalData())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (m *PackageCodeKey) Serialize(writer i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.SerializationWriter)(error) {
+    {
+        err := writer.WriteStringValue("code_hash", m.GetCodeHash())
+        if err != nil {
+            return err
+        }
+    }
+    {
+        err := writer.WriteAdditionalData(m.GetAdditionalData())
+        if err != nil {
+            return err
+        }
+    }
+    return nil
 }
-
 // SetAdditionalData sets the AdditionalData property value. Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
-func (m *PackageCodeKey) SetAdditionalData(value map[string]any) {
-	m.additionalData = value
+func (m *PackageCodeKey) SetAdditionalData(value map[string]any)() {
+    m.additionalData = value
 }
-
 // SetCodeHash sets the code_hash property value. The hex-encoded code hash, capturing the vm-type and the code itself.
-func (m *PackageCodeKey) SetCodeHash(value *string) {
-	m.code_hash = value
+func (m *PackageCodeKey) SetCodeHash(value *string)() {
+    m.code_hash = value
 }
-
 type PackageCodeKeyable interface {
-	i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.AdditionalDataHolder
-	i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
-	GetCodeHash() *string
-	SetCodeHash(value *string)
+    i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.AdditionalDataHolder
+    i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
+    GetCodeHash()(*string)
+    SetCodeHash(value *string)()
 }
